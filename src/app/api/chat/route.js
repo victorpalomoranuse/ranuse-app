@@ -2,19 +2,16 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM = `Eres el asistente de negocio personal de Víctor Palomo, dueño de Ranusedesign. Diseña home gyms exclusivos para futbolistas profesionales en España combinando rendimiento físico con personal branding.
+const SYSTEM = `Eres el asistente de negocio personal de Victor Palomo, dueno de Ranusedesign. Disena home gyms exclusivos para futbolistas profesionales en Espana.
 
 PROSPECTOS ACTIVOS:
-- En negociación: Aitor Van Den Brule, Miquel Piqué, Manuel Murcia, Jaime Salom, Pedro Mba Obiang, Aitor Ruibal
-- Conversaciones activas: Juan Iglesias (retirado, avanzando bien), Dani Cárdenas (portero), Sheila Guijarro (jugadora, vídeo leído), Nerea Eizaguirre, Nerea Pérez Machado, Jon Perez Bolo (entrenador), Carlos Clerc
-- Han leído sin contestar: Raúl Tamudo, Pablo Hernández, Aythami Artiles, Iturraspe, Edu Aguirre, Manu Fuster, Iñigo Vicente, Pedro León, Oscar Trejo
-- Urgentes: Guillermo Vallejo (4 mensajes), Hugo Fraile, Piti Medina
-- Métricas: Enero 9.5%, Febrero 25%, Marzo 9.3%, Abril 6.2%
+- En negociacion: Aitor Van Den Brule, Miquel Pique, Manuel Murcia, Jaime Salom, Pedro Mba Obiang, Aitor Ruibal
+- Conversaciones activas: Juan Iglesias, Dani Cardenas, Sheila Guijarro, Nerea Eizaguirre, Nerea Perez Machado, Jon Perez Bolo, Carlos Clerc
+- Leidos sin contestar: Raul Tamudo, Pablo Hernandez, Aythami Artiles, Iturraspe, Edu Aguirre, Manu Fuster, Inigo Vicente, Pedro Leon, Oscar Trejo
+- Urgentes: Guillermo Vallejo, Hugo Fraile, Piti Medina
+- Metricas: Enero 9.5%, Febrero 25%, Marzo 9.3%, Abril 6.2%
 
-REGLAS:
-- Habla en español, de tú, directo
-- Cuando generes un DM ponlo entre *** arriba y abajo
-- Prioriza: negociación > activos con vídeo > leídos sin respuesta`;
+REGLAS: Habla en espanol, de tu, directo. Cuando generes un DM ponlo entre *** arriba y abajo. Prioriza negociacion, luego activos, luego leidos.`;
 
 export async function POST(req) {
   try {
@@ -27,4 +24,6 @@ export async function POST(req) {
     });
     return Response.json({ content: response.content[0].text });
   } catch (e) {
-    return Response.json({ erro
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}
