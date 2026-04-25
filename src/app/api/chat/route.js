@@ -10,10 +10,26 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        estado: { type: "string", enum: ["no_leido", "leido", "interesado", "inviable", "rechazado", "venta"], description: "Filtrar por estado" },
+        estado: { type: "string", enum: ["no_leido", "leido", "interesado", "inviable", "rechazado", "venta"] },
         mes: { type: "string", description: "Filtrar por mes_primer_contacto (ej: 'abril')" },
-        nombre_parcial: { type: "string", description: "Buscar por nombre que contenga este texto" },
+        nombre_parcial: { type: "string" },
       },
+    },
+  },
+  {
+    name: "crear_prospecto",
+    description: "Crea un prospecto nuevo en la base de datos. Úsalo cuando Víctor diga 'añade a X', 'mete a Y como prospecto', 'crea un prospecto llamado Z'. Crea con los datos que tengas, los demás los deja vacíos.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nombre: { type: "string", description: "Nombre completo del prospecto" },
+        perfil: { type: "string", description: "Jugador, Portero, Entrenador, Retirado, Jugadora, Kings League, Árbitro" },
+        liga: { type: "string", description: "Hypermotion, LaLiga, Liga F, Kings League, Serie A, Ligue 1, Liga Portugal, Bundesliga..." },
+        mes_primer_contacto: { type: "string", description: "enero, febrero, marzo, abril, mayo, junio, julio, agosto, septiembre, octubre, noviembre, diciembre" },
+        estado: { type: "string", enum: ["no_leido", "leido", "interesado", "inviable", "rechazado", "venta"], description: "Por defecto 'no_leido'" },
+        comentarios: { type: "string", description: "Notas iniciales del prospecto" },
+      },
+      required: ["nombre"],
     },
   },
   {
@@ -22,53 +38,69 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        nombre: { type: "string", description: "Nombre del prospecto (o parte de él)" },
+        nombre: { type: "string" },
         nuevo_estado: { type: "string", enum: ["no_leido", "leido", "interesado", "inviable", "rechazado", "venta"] },
-        importe_venta: { type: "number", description: "Si el nuevo estado es 'venta', el importe en euros" },
+        importe_venta: { type: "number" },
       },
       required: ["nombre", "nuevo_estado"],
     },
   },
   {
+    name: "actualizar_fechas_prospecto",
+    description: "Actualiza las fechas de avance del embudo de un prospecto: cuándo respondió, cuándo le mandé vídeo, cuándo fue la llamada 1, cuándo fue la llamada 2, si asistió a la llamada. Úsalo cuando Víctor diga cosas como 'a Pedro le mandé el vídeo ayer', 'agendé llamada con Borja el viernes', 'Hugo asistió a la llamada'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nombre: { type: "string" },
+        fecha_respuesta: { type: "string", description: "Formato YYYY-MM-DD" },
+        fecha_video: { type: "string", description: "Formato YYYY-MM-DD" },
+        fecha_llamada1: { type: "string", description: "Formato YYYY-MM-DD" },
+        fecha_llamada2: { type: "string", description: "Formato YYYY-MM-DD" },
+        asistio_llamada1: { type: "boolean" },
+      },
+      required: ["nombre"],
+    },
+  },
+  {
     name: "listar_plantillas",
-    description: "Lista todas las plantillas de mensaje guardadas de Víctor.",
+    description: "Lista todas las plantillas de mensaje guardadas.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "guardar_plantilla",
-    description: "Guarda una nueva plantilla de mensaje con un nombre. Usar cuando Víctor diga 'guarda esto como jugadores corto', 'guarda esta estructura como portero humor'.",
+    description: "Guarda una plantilla de mensaje con un nombre. Úsalo cuando Víctor diga 'guarda esto como X', 'guarda esta estructura como portero humor'.",
     input_schema: {
       type: "object",
       properties: {
-        nombre: { type: "string", description: "Nombre corto de la plantilla, ej: 'jugadores corto'" },
-        estructura: { type: "string", description: "El texto de la plantilla, puede usar {nombre} como placeholder" },
-        descripcion: { type: "string", description: "Descripción opcional de cuándo usar la plantilla" },
+        nombre: { type: "string", description: "Nombre corto, ej: 'jugadores corto'" },
+        estructura: { type: "string", description: "El texto, puede usar [nombre] como placeholder" },
+        descripcion: { type: "string" },
       },
       required: ["nombre", "estructura"],
     },
   },
   {
     name: "guardar_mensaje_enviado",
-    description: "Guarda un mensaje como enviado a un prospecto concreto. Se usa cuando Víctor confirma que ya ha mandado un DM.",
+    description: "Guarda un mensaje enviado a un prospecto. Si es el primer mensaje (#1), se considera contacto inicial. Si es #2 o superior, es seguimiento. SIEMPRE pregunta a Víctor antes de guardar para confirmar.",
     input_schema: {
       type: "object",
       properties: {
         nombre_prospecto: { type: "string" },
         texto: { type: "string" },
-        plantilla_nombre: { type: "string", description: "Opcional: nombre de la plantilla usada" },
-        es_seguimiento: { type: "boolean", description: "true si es FU, false si es primer contacto" },
+        plantilla_nombre: { type: "string" },
+        es_seguimiento: { type: "boolean", description: "true si es FU, false si es primer contacto. Si no se especifica, se decide automáticamente según si ya hay mensajes previos." },
       },
       required: ["nombre_prospecto", "texto"],
     },
   },
   {
     name: "seguimientos_pendientes",
-    description: "Devuelve la lista de prospectos a los que hay que hacer seguimiento: los que están en 'leido' desde hace 4+ días sin mensaje posterior, y los 'interesado' sin video/llamada aún.",
+    description: "Lista prospectos con seguimiento pendiente: los 'leido' sin mensaje posterior, los 'interesado' sin video, etc.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "analizar_plantillas",
-    description: "Analiza qué plantillas tienen mejor tasa de respuesta, interés y venta. Úsalo cuando Víctor pregunte 'qué plantilla funciona mejor'.",
+    description: "Analiza qué plantillas tienen mejor tasa de respuesta, interés y venta.",
     input_schema: { type: "object", properties: {} },
   },
 ];
@@ -85,6 +117,25 @@ async function ejecutarHerramienta(nombre, input) {
       return { prospectos: r.data, total: r.data.length };
     }
 
+    if (nombre === "crear_prospecto") {
+      // Comprobamos que no exista ya con ese nombre
+      const exist = await supabaseAdmin.from("prospectos").select("id, nombre").ilike("nombre", input.nombre).limit(1);
+      if (exist.data && exist.data.length > 0) {
+        return { error: `Ya existe un prospecto llamado "${exist.data[0].nombre}"` };
+      }
+      const r = await supabaseAdmin.from("prospectos").insert({
+        nombre: input.nombre,
+        perfil: input.perfil || null,
+        liga: input.liga || null,
+        idioma: "es",
+        estado: input.estado || "no_leido",
+        comentarios: input.comentarios || null,
+        mes_primer_contacto: input.mes_primer_contacto || null,
+      }).select().single();
+      if (r.error) return { error: r.error.message };
+      return { ok: true, prospecto: r.data };
+    }
+
     if (nombre === "cambiar_estado_prospecto") {
       const b = await supabaseAdmin.from("prospectos").select("id, nombre").ilike("nombre", `%${input.nombre}%`).limit(5);
       if (!b.data || b.data.length === 0) return { error: `No encuentro a "${input.nombre}"` };
@@ -96,6 +147,19 @@ async function ejecutarHerramienta(nombre, input) {
         if (input.importe_venta) update.importe_venta = input.importe_venta;
       }
       const r = await supabaseAdmin.from("prospectos").update(update).eq("id", target.id).select().single();
+      if (r.error) return { error: r.error.message };
+      return { ok: true, prospecto: r.data };
+    }
+
+    if (nombre === "actualizar_fechas_prospecto") {
+      const b = await supabaseAdmin.from("prospectos").select("id, nombre").ilike("nombre", `%${input.nombre}%`).limit(5);
+      if (!b.data || b.data.length === 0) return { error: `No encuentro a "${input.nombre}"` };
+      if (b.data.length > 1) return { error: "Varios coinciden", candidatos: b.data.map(x => x.nombre) };
+      const update = { updated_at: new Date().toISOString() };
+      ["fecha_respuesta", "fecha_video", "fecha_llamada1", "fecha_llamada2", "asistio_llamada1"].forEach(c => {
+        if (input[c] !== undefined) update[c] = input[c];
+      });
+      const r = await supabaseAdmin.from("prospectos").update(update).eq("id", b.data[0].id).select().single();
       if (r.error) return { error: r.error.message };
       return { ok: true, prospecto: r.data };
     }
@@ -132,6 +196,7 @@ async function ejecutarHerramienta(nombre, input) {
 
       const prev = await supabaseAdmin.from("mensajes").select("secuencia").eq("prospecto_id", prospecto_id).order("secuencia", { ascending: false }).limit(1);
       const siguiente = prev.data && prev.data.length > 0 ? (prev.data[0].secuencia || 0) + 1 : 1;
+      const esSeg = input.es_seguimiento !== undefined ? input.es_seguimiento : siguiente > 1;
 
       const r = await supabaseAdmin.from("mensajes").insert({
         prospecto_id,
@@ -140,17 +205,15 @@ async function ejecutarHerramienta(nombre, input) {
         plantilla_id,
         texto: input.texto,
         enviado_en: new Date().toISOString().slice(0, 10),
-        es_seguimiento: input.es_seguimiento || siguiente > 1,
+        es_seguimiento: esSeg,
       }).select().single();
 
       if (r.error) return { error: r.error.message };
-      return { ok: true, mensaje: r.data };
+      return { ok: true, mensaje: r.data, secuencia: siguiente, es_seguimiento: esSeg };
     }
 
     if (nombre === "seguimientos_pendientes") {
-      // Prospectos leídos sin seguimiento reciente
       const leidos = await supabaseAdmin.from("prospectos").select("id, nombre, perfil, mes_primer_contacto, updated_at").eq("estado", "leido").order("updated_at", { ascending: true }).limit(20);
-      // Interesados sin vídeo aún
       const interesados = await supabaseAdmin.from("prospectos").select("id, nombre, perfil, mes_primer_contacto, fecha_video").eq("estado", "interesado").is("fecha_video", null).limit(20);
       return {
         leidos_sin_seguimiento: leidos.data || [],
@@ -159,12 +222,6 @@ async function ejecutarHerramienta(nombre, input) {
     }
 
     if (nombre === "analizar_plantillas") {
-      const res = await fetch(`${process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : "http://localhost:3000"}/api/mensajes`).catch(() => null);
-      if (res && res.ok) {
-        const data = await res.json();
-        return { analisis: data.analisis };
-      }
-      // Fallback: calcular aquí mismo si la llamada interna falla
       const { data: mensajes } = await supabaseAdmin.from("mensajes").select("*");
       const { data: plantillas } = await supabaseAdmin.from("plantillas").select("id, nombre");
       const { data: prospectos } = await supabaseAdmin.from("prospectos").select("id, estado");
@@ -206,32 +263,35 @@ CONOCIMIENTO DE CONTEXTO:
 - Estados posibles de un prospecto: no_leido (enviado sin leer), leido (visto sin respuesta), interesado (respondió con interés), inviable (respondió pero no encaja), rechazado (dijo que no), venta (cerrado).
 - Embudo Ranuse: DM → responde → muestra interés → le mando VÍDEO → LLAMADA 1 → (opcional LLAMADA 2) → VENTA.
 - Víctor evita Real Madrid, Barça y Atlético. Prioriza LaLiga Hypermotion (segunda), Liga F, porteros, retirados, entrenadores, Kings League.
-- Tipo de mensaje: "jugadores corto", "jugadores largo", "portero", "entrenador", "retirado", "liga f", "kings league".
+- Tipo de mensaje: "jugadores corto", "jugadores largo", "portero", "entrenador", "retirado", "liga f", "kings league", "primer contacto diseño", "seguimiento diseño".
 
 HERRAMIENTAS DISPONIBLES:
-- listar_prospectos: para ver qué prospectos hay con filtros.
-- cambiar_estado_prospecto: para actualizar estado cuando Víctor te dice algo como "X me contestó" o "Y ha comprado".
-- listar_plantillas: para ver las plantillas guardadas.
-- guardar_plantilla: cuando Víctor diga "guarda esto como X" o "guarda esta estructura como X".
-- guardar_mensaje_enviado: cuando Víctor confirme que ya mandó un DM concreto a un prospecto.
-- seguimientos_pendientes: cuando pregunte "a quién toca seguir hoy" o similar.
+- listar_prospectos: ver prospectos con filtros.
+- crear_prospecto: cuando Víctor diga "añade a X", "mete a Y como prospecto". Crea con los datos que dé y deja el resto en blanco.
+- cambiar_estado_prospecto: cuando diga "X me contestó", "Y rechazó", "Z ha comprado".
+- actualizar_fechas_prospecto: cuando diga "le mandé el vídeo a Pedro ayer", "agendé llamada con X el viernes", "Hugo asistió a la llamada".
+- listar_plantillas: ver plantillas guardadas.
+- guardar_plantilla: cuando diga "guarda esto como X".
+- guardar_mensaje_enviado: cuando confirme que ya mandó un mensaje. SIEMPRE pregunta antes de guardar.
+- seguimientos_pendientes: cuando pregunte "a quién toca seguir hoy".
 - analizar_plantillas: cuando pregunte "qué plantilla funciona mejor".
 
 REGLAS IMPORTANTES:
 1. Cuando Víctor pida un DM, mira primero si hay plantilla con ese nombre (usa listar_plantillas). Si la hay, sigue su estructura pero personaliza con nombre/club.
-2. Después de generar un DM, SIEMPRE pregunta: "¿Lo has enviado ya? Dime sí y lo guardo como enviado con la plantilla X."
-3. No ejecutes acciones destructivas (borrar, cambios de estado) sin confirmar primero con Víctor cuando haya duda.
-4. Si varios prospectos coinciden con un nombre parcial, pregunta cuál es.
-5. Cuando guardes una plantilla, confirma con el nombre corto que le has puesto.`;
+2. Después de generar un DM, SIEMPRE pregunta: "¿Lo has enviado ya? Dime sí y lo guardo como mensaje #X (FU si es seguimiento) usando la plantilla 'X'."
+3. Cuando guardes un mensaje, AVÍSALE a Víctor del número de secuencia: "✅ Guardado como mensaje #2 (seguimiento) de Borja Mayoral."
+4. Si Víctor menciona varios prospectos en una sola frase ("añade a Carlos, Pedro y Luis"), créalos uno a uno con varias llamadas a crear_prospecto.
+5. No ejecutes acciones destructivas (borrar) sin confirmar.
+6. Si varios prospectos coinciden con un nombre parcial, pregunta cuál es.
+7. Cuando guardes una plantilla, confirma con el nombre corto que le has puesto.`;
 
 export async function POST(req) {
   try {
     const { messages } = await req.json();
-
     let turno = 0;
     let historial = messages.map(m => ({ role: m.role, content: m.content }));
 
-    while (turno < 6) {
+    while (turno < 8) {
       turno++;
 
       const response = await client.messages.create({
@@ -242,16 +302,13 @@ export async function POST(req) {
         messages: historial,
       });
 
-      // Si no hay tool_use, devolver el texto y terminar
       if (response.stop_reason !== "tool_use") {
         const texto = response.content.filter(b => b.type === "text").map(b => b.text).join("\n").trim();
         return Response.json({ content: texto || "(sin respuesta)" });
       }
 
-      // Añadir la respuesta del modelo al historial
       historial.push({ role: "assistant", content: response.content });
 
-      // Ejecutar todas las tools que pidió
       const toolResults = [];
       for (const block of response.content) {
         if (block.type === "tool_use") {
@@ -263,7 +320,6 @@ export async function POST(req) {
           });
         }
       }
-
       historial.push({ role: "user", content: toolResults });
     }
 
