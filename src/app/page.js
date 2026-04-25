@@ -48,6 +48,10 @@ export default function App() {
   const [editObjetivos, setEditObjetivos] = useState(false);
   const [nuevaPlantilla, setNuevaPlantilla] = useState({ nombre: "", estructura: "", descripcion: "" });
   const [editandoPlantilla, setEditandoPlantilla] = useState(null);
+  const [crearProspecto, setCrearProspecto] = useState(false);
+  const [nuevoProspecto, setNuevoProspecto] = useState({ nombre: "", perfil: "", liga: "", mes_primer_contacto: "abril", estado: "no_leido", comentarios: "" });
+  const [anadirMensaje, setAnadirMensaje] = useState(false);
+  const [nuevoMensaje, setNuevoMensaje] = useState({ texto: "", plantilla_id: "" });
 
   // Mensajes del prospecto abierto
   const [mensajesProspecto, setMensajesProspecto] = useState([]);
@@ -137,6 +141,38 @@ export default function App() {
     if (!confirm("¿Borrar este mensaje?")) return;
     await fetch(`/api/mensajes?id=${id}`, { method: "DELETE" });
     if (editando) fetch(`/api/mensajes?prospecto_id=${editando}`).then(r => r.json()).then(d => setMensajesProspecto(d.mensajes || []));
+  };
+
+  const crearProspectoManual = async () => {
+    if (!nuevoProspecto.nombre.trim()) return;
+    const res = await fetch("/api/prospectos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nuevoProspecto) });
+    const data = await res.json();
+    if (data.ok) {
+      setNuevoProspecto({ nombre: "", perfil: "", liga: "", mes_primer_contacto: "abril", estado: "no_leido", comentarios: "" });
+      setCrearProspecto(false);
+      cargarTodo();
+    } else {
+      alert("Error: " + (data.error || "no se pudo crear"));
+    }
+  };
+
+  const guardarNuevoMensaje = async () => {
+    if (!nuevoMensaje.texto.trim() || !editando) return;
+    const body = { prospecto_id: editando, texto: nuevoMensaje.texto };
+    if (nuevoMensaje.plantilla_id) {
+      const pl = plantillas.find(p => p.id === Number(nuevoMensaje.plantilla_id));
+      if (pl) { body.plantilla_id = pl.id; body.tipo_mensaje = pl.nombre; }
+    }
+    const res = await fetch("/api/mensajes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.ok) {
+      setNuevoMensaje({ texto: "", plantilla_id: "" });
+      setAnadirMensaje(false);
+      fetch(`/api/mensajes?prospecto_id=${editando}`).then(r => r.json()).then(d => setMensajesProspecto(d.mensajes || []));
+      cargarTodo();
+    } else {
+      alert("Error: " + (data.error || "no se pudo guardar"));
+    }
   };
 
   const renderMsg = (m, i) => {
@@ -255,6 +291,24 @@ export default function App() {
           </>}
 
           {tab === "prospectos" && <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+            <button onClick={() => setCrearProspecto(!crearProspecto)} style={{ width: "100%", background: crearProspecto ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 10, padding: 11, color: crearProspecto ? "#beb0a2" : "#000", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>{crearProspecto ? "✕ Cancelar" : "➕ Nuevo prospecto"}</button>
+            {crearProspecto && <div style={{ background: "rgba(190,176,162,0.05)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+              <input placeholder="Nombre completo *" value={nuevoProspecto.nombre} onChange={e => setNuevoProspecto(p => ({ ...p, nombre: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
+              <select value={nuevoProspecto.perfil} onChange={e => setNuevoProspecto(p => ({ ...p, perfil: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                <option value="">Perfil...</option>{PERFILES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select value={nuevoProspecto.liga} onChange={e => setNuevoProspecto(p => ({ ...p, liga: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                <option value="">Liga...</option>{LIGAS.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+              <select value={nuevoProspecto.mes_primer_contacto} onChange={e => setNuevoProspecto(p => ({ ...p, mes_primer_contacto: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                {MESES.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <select value={nuevoProspecto.estado} onChange={e => setNuevoProspecto(p => ({ ...p, estado: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                {Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+              <textarea placeholder="Comentarios (opcional)" value={nuevoProspecto.comentarios} onChange={e => setNuevoProspecto(p => ({ ...p, comentarios: e.target.value }))} style={{ ...inputStyle, minHeight: 50, marginBottom: 8, fontFamily: "inherit" }} />
+              <button onClick={crearProspectoManual} disabled={!nuevoProspecto.nombre.trim()} style={{ width: "100%", background: nuevoProspecto.nombre.trim() ? "linear-gradient(135deg, #beb0a2, #a89686)" : "#1a1a1a", border: "none", borderRadius: 8, padding: 9, color: nuevoProspecto.nombre.trim() ? "#000" : "#444", fontSize: 12, fontWeight: 700, cursor: nuevoProspecto.nombre.trim() ? "pointer" : "default" }}>Crear prospecto</button>
+            </div>}
             <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar por nombre..." style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "9px 12px", color: "#fff", fontSize: 13, marginBottom: 10 }} />
 
             <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
@@ -297,7 +351,7 @@ export default function App() {
                           <div style={{ width: 7, height: 7, borderRadius: "50%", background: cfgEstado.color, flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div>
-                            <div style={{ color: "#666", fontSize: 11 }}>{[p.perfil, p.mes_primer_contacto, p.estado === "venta" && p.importe_venta ? `💰 ${p.importe_venta}€` : null].filter(Boolean).join(" · ")}</div>
+                            <div style={{ color: "#666", fontSize: 11 }}>{[p.perfil, p.mes_primer_contacto, p.estado === "venta" && p.importe_venta ? `💰 ${p.importe_venta}€` : null, p.num_mensajes > 0 ? `📨 ${p.num_mensajes} msg${p.num_mensajes > 1 ? "s" : ""}` : null].filter(Boolean).join(" · ")}</div>
                           </div>
                           <div style={{ color: "#555", fontSize: 10 }}>{editando === p.id ? "▲" : "▼"}</div>
                         </div>
@@ -315,6 +369,15 @@ export default function App() {
                             <Campo label="Importe venta (€)"><input type="number" defaultValue={p.importe_venta || ""} onBlur={e => guardarProspecto(p.id, { importe_venta: e.target.value ? Number(e.target.value) : null })} style={inputStyle} placeholder="4500" /></Campo>
                             <Campo label="Comentarios"><textarea defaultValue={p.comentarios || ""} onBlur={e => guardarProspecto(p.id, { comentarios: e.target.value })} style={{ ...inputStyle, minHeight: 50, fontFamily: "inherit" }} /></Campo>
 
+                            <button onClick={() => setAnadirMensaje(!anadirMensaje)} style={{ width: "100%", background: anadirMensaje ? "rgba(255,255,255,0.08)" : "rgba(190,176,162,0.12)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 8, padding: 8, color: "#beb0a2", fontSize: 11, fontWeight: 600, cursor: "pointer", marginTop: 8, marginBottom: 8 }}>{anadirMensaje ? "✕ Cancelar" : "➕ Añadir mensaje enviado"}</button>
+                            {anadirMensaje && <div style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                              <select value={nuevoMensaje.plantilla_id} onChange={e => setNuevoMensaje(m => ({ ...m, plantilla_id: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                                <option value="">Sin plantilla</option>
+                                {plantillas.map(pl => <option key={pl.id} value={pl.id}>{pl.nombre}</option>)}
+                              </select>
+                              <textarea placeholder="Texto del mensaje enviado..." value={nuevoMensaje.texto} onChange={e => setNuevoMensaje(m => ({ ...m, texto: e.target.value }))} style={{ ...inputStyle, minHeight: 60, marginBottom: 6, fontFamily: "inherit" }} />
+                              <button onClick={guardarNuevoMensaje} disabled={!nuevoMensaje.texto.trim()} style={{ width: "100%", background: nuevoMensaje.texto.trim() ? "linear-gradient(135deg, #beb0a2, #a89686)" : "#1a1a1a", border: "none", borderRadius: 6, padding: 7, color: nuevoMensaje.texto.trim() ? "#000" : "#444", fontSize: 11, fontWeight: 700, cursor: nuevoMensaje.texto.trim() ? "pointer" : "default" }}>Guardar como #{mensajesProspecto.length + 1} {mensajesProspecto.length > 0 ? "(seguimiento)" : "(inicial)"}</button>
+                            </div>}
                             {mensajesProspecto.length > 0 && (
                               <div style={{ marginTop: 10 }}>
                                 <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>📨 Historial ({mensajesProspecto.length})</div>
