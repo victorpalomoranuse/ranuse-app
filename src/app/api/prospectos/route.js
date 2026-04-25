@@ -13,6 +13,16 @@ export async function GET() {
   }
   const prospectos = result.data || [];
 
+  // Cargar el conteo de mensajes por prospecto
+  const { data: mensajes } = await supabaseAdmin.from("mensajes").select("prospecto_id");
+  const conteo = {};
+  for (const m of (mensajes || [])) {
+    conteo[m.prospecto_id] = (conteo[m.prospecto_id] || 0) + 1;
+  }
+  for (const p of prospectos) {
+    p.num_mensajes = conteo[p.id] || 0;
+  }
+
   return Response.json({
     prospectos,
     metricasCohorte: calcularMetricasCohorte(prospectos),
@@ -20,61 +30,32 @@ export async function GET() {
   });
 }
 
-/**
- * Vista COHORTE: agrupa por mes de primer contacto.
- * Cada mes te dice: de los X que contactaste en ese mes, cuántos respondieron, vieron vídeo,
- * llamaron, vendieron, cuánto facturaron... (aunque la venta se haya cerrado meses después).
- * Útil para saber qué mes de prospección fue más rentable.
- */
 function calcularMetricasCohorte(prospectos) {
   const porMes = {};
-
   for (const p of prospectos) {
     const mes = p.mes_primer_contacto || "sin_mes";
     if (!porMes[mes]) porMes[mes] = plantilla(mes);
     const m = porMes[mes];
-
     m.contactados += 1;
-
-    // Leído
     if (p.estado === "leido") m.leidos += 1;
-
-    // Respondieron (interesado + inviable + rechazado + venta son los que te escribieron algo)
     const respondio = ["interesado", "inviable", "rechazado", "venta"].includes(p.estado);
     if (respondio) m.responden += 1;
-
-    // Interesados (objetivo + bloqueo) = interesado + venta
     if (p.estado === "interesado" || p.estado === "venta") m.objetivo_bloqueo += 1;
-
-    // Vídeo enviado
     if (p.fecha_video) m.videos += 1;
-
-    // Agendas (llamada 1 agendada)
     if (p.fecha_llamada1) m.agendas += 1;
-
-    // Asistencia a llamada 1
     if (p.asistio_llamada1 === true) m.asistencias += 1;
-
-    // Llamada 2
     if (p.fecha_llamada2) m.llamadas2 += 1;
-
-    // Ventas
     if (p.estado === "venta") {
       m.ventas += 1;
       m.facturacion += Number(p.importe_venta) || 0;
     }
+    m.seguimientos += Math.max(0, (p.num_mensajes || 0) - 1);
   }
-
   return Object.values(porMes).map(calcularPorcentajes).sort(ordenarMes);
 }
 
-/**
- * Vista CAJA: agrupa las VENTAS por fecha_venta (mes real en el que se cobró).
- * Útil para ver el flujo de caja real mes a mes.
- */
 function calcularMetricasCaja(prospectos) {
   const porMes = {};
-
   for (const p of prospectos) {
     if (p.estado !== "venta" || !p.fecha_venta) continue;
     const fecha = new Date(p.fecha_venta);
@@ -84,24 +65,11 @@ function calcularMetricasCaja(prospectos) {
     porMes[key].ventas += 1;
     porMes[key].facturacion += Number(p.importe_venta) || 0;
   }
-
   return Object.values(porMes).sort((a, b) => a.periodo.localeCompare(b.periodo));
 }
 
 function plantilla(mes) {
-  return {
-    mes,
-    contactados: 0,
-    leidos: 0,
-    responden: 0,
-    objetivo_bloqueo: 0,
-    videos: 0,
-    agendas: 0,
-    asistencias: 0,
-    llamadas2: 0,
-    ventas: 0,
-    facturacion: 0,
-  };
+  return { mes, contactados: 0, leidos: 0, responden: 0, objetivo_bloqueo: 0, videos: 0, agendas: 0, asistencias: 0, llamadas2: 0, ventas: 0, facturacion: 0, seguimientos: 0 };
 }
 
 function calcularPorcentajes(m) {
@@ -121,9 +89,7 @@ function ordenarMes(a, b) {
 
 export async function PATCH(req) {
   const body = await req.json();
-  if (!body.id) {
-    return Response.json({ error: "Falta id" }, { status: 400 });
-  }
+  if (!body.id) return Response.json({ error: "Falta id" }, { status: 400 });
   const update = { updated_at: new Date().toISOString() };
   const campos = [
     "nombre", "perfil", "liga", "idioma", "estado", "comentarios", "notas", "mes_primer_contacto",
@@ -133,28 +99,23 @@ export async function PATCH(req) {
   for (const c of campos) {
     if (body[c] !== undefined) update[c] = body[c] === "" ? null : body[c];
   }
-
-  // Automatismo: si el estado pasa a "venta" y no hay fecha_venta, ponla hoy.
   if (body.estado === "venta" && body.fecha_venta === undefined) {
     update.fecha_venta = new Date().toISOString().slice(0, 10);
   }
-
-  const result = await supabaseAdmin
-    .from("prospectos")
-    .update(update)
-    .eq("id", body.id)
-    .select()
-    .single();
+  const result = await supabaseAdmin.from("prospectos").update(update).eq("id", body.id).select().single();
   if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
   return Response.json({ ok: true, prospecto: result.data });
 }
 
 export async function POST(req) {
   const body = await req.json();
+  if (!body.nombre || !body.nombre.trim()) {
+    return Response.json({ error: "El nombre es obligatorio" }, { status: 400 });
+  }
   const result = await supabaseAdmin
     .from("prospectos")
     .insert({
-      nombre: body.nombre,
+      nombre: body.nombre.trim(),
       perfil: body.perfil || null,
       liga: body.liga || null,
       idioma: body.idioma || "es",
