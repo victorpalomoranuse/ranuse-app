@@ -11,16 +11,26 @@ const ESTADOS = {
   interesado: { label: "Interesado", color: "#22c55e", emoji: "🟢" },
   inviable:   { label: "Inviable",   color: "#9ca3af", emoji: "⚪" },
   rechazado:  { label: "Rechazado",  color: "#f87171", emoji: "🔴" },
+  descartado: { label: "Descartado", color: "#4b5563", emoji: "⚫" },
+  enfriado:   { label: "Enfriado",   color: "#64748b", emoji: "🧊" },
   venta:      { label: "Venta",      color: "#beb0a2", emoji: "💰" },
 };
 
-const ORDEN_ESTADOS = ["venta", "interesado", "leido", "no_leido", "inviable", "rechazado"];
+const ORDEN_ESTADOS = ["venta", "interesado", "leido", "no_leido", "enfriado", "inviable", "rechazado", "descartado"];
+
+const ORIGENES = {
+  outbound: { label: "Outbound", emoji: "📤" },
+  inbound:  { label: "Inbound",  emoji: "📥" },
+};
+const CANALES = ["instagram", "whatsapp", "web", "recomendacion", "evento", "otro"];
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 export default function App() {
   const [tab, setTab] = useState("chat");
   const [prospectos, setProspectos] = useState([]);
   const [metricasCohorte, setMetricasCohorte] = useState([]);
+  const [metricasCohorteInbound, setMetricasCohorteInbound] = useState([]);
+  const [metricasCanales, setMetricasCanales] = useState([]);
   const [metricasCaja, setMetricasCaja] = useState([]);
   const [objetivos, setObjetivos] = useState([]);
   const [plantillas, setPlantillas] = useState([]);
@@ -40,6 +50,20 @@ export default function App() {
   const [generated, setGenerated] = useState([]);
 
   const [filtroEstado, setFiltroEstado] = useState("all");
+  const [filtroOrigen, setFiltroOrigen] = useState("all");
+  // Finanzas
+  const [finanzasPwd, setFinanzasPwd] = useState("");
+  const [finanzasUnlocked, setFinanzasUnlocked] = useState(false);
+  const [finanzasPwdInput, setFinanzasPwdInput] = useState("");
+  const [finanzasError, setFinanzasError] = useState("");
+  const [finanzasData, setFinanzasData] = useState(null);
+  const [categoriasFin, setCategoriasFin] = useState([]);
+  const [crearMov, setCrearMov] = useState(false);
+  const [nuevoMov, setNuevoMov] = useState({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco" });
+  const [crearCategoria, setCrearCategoria] = useState(false);
+  const [nuevaCategoria, setNuevaCategoria] = useState({ nombre: "", tipo: "gasto", color: "#beb0a2" });
+  const [filtroFinTipo, setFiltroFinTipo] = useState("all");
+  const [filtroFinMes, setFiltroFinMes] = useState("all");
   const [filtroMes, setFiltroMes] = useState("all");
   const [busqueda, setBusqueda] = useState("");
   const [agrupacion, setAgrupacion] = useState("mes");
@@ -49,7 +73,7 @@ export default function App() {
   const [nuevaPlantilla, setNuevaPlantilla] = useState({ nombre: "", estructura: "", descripcion: "" });
   const [editandoPlantilla, setEditandoPlantilla] = useState(null);
   const [crearProspecto, setCrearProspecto] = useState(false);
-  const [nuevoProspecto, setNuevoProspecto] = useState({ nombre: "", perfil: "", liga: "", mes_primer_contacto: "abril", estado: "no_leido", comentarios: "" });
+  const [nuevoProspecto, setNuevoProspecto] = useState({ nombre: "", perfil: "", liga: "", mes_primer_contacto: "abril", estado: "no_leido", comentarios: "", origen: "outbound", canal: "" });
   const [anadirMensaje, setAnadirMensaje] = useState(false);
   const [nuevoMensaje, setNuevoMensaje] = useState({ texto: "", plantilla_id: "" });
 
@@ -77,6 +101,8 @@ export default function App() {
       ]);
       setProspectos(pRes.prospectos || []);
       setMetricasCohorte(pRes.metricasCohorte || []);
+      setMetricasCohorteInbound(pRes.metricasCohorteInbound || []);
+      setMetricasCanales(pRes.metricasCanales || []);
       setMetricasCaja(pRes.metricasCaja || []);
       setObjetivos(oRes.objetivos || []);
       setPlantillas(plRes.plantillas || []);
@@ -148,13 +174,90 @@ export default function App() {
     const res = await fetch("/api/prospectos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nuevoProspecto) });
     const data = await res.json();
     if (data.ok) {
-      setNuevoProspecto({ nombre: "", perfil: "", liga: "", mes_primer_contacto: "abril", estado: "no_leido", comentarios: "" });
+      setNuevoProspecto({ nombre: "", perfil: "", liga: "", mes_primer_contacto: "abril", estado: "no_leido", comentarios: "", origen: "outbound", canal: "" });
       setCrearProspecto(false);
       cargarTodo();
     } else {
       alert("Error: " + (data.error || "no se pudo crear"));
     }
   };
+
+  // === FINANZAS ===
+  const finHeaders = (pwd) => ({ "Content-Type": "application/json", "x-finanzas-password": pwd || finanzasPwd });
+
+  const cargarFinanzas = async (pwd) => {
+    const password = pwd || finanzasPwd;
+    const [fRes, cRes] = await Promise.all([
+      fetch("/api/finanzas", { headers: finHeaders(password) }),
+      fetch("/api/categorias-finanzas", { headers: finHeaders(password) }),
+    ]);
+    if (fRes.status === 401) {
+      setFinanzasUnlocked(false);
+      setFinanzasError("Contraseña incorrecta");
+      sessionStorage.removeItem("finanzas_pwd");
+      return false;
+    }
+    const fData = await fRes.json();
+    const cData = await cRes.json();
+    setFinanzasData(fData);
+    setCategoriasFin(cData.categorias || []);
+    return true;
+  };
+
+  const unlockFinanzas = async () => {
+    if (!finanzasPwdInput) { setFinanzasError("Escribe la contraseña"); return; }
+    setFinanzasPwd(finanzasPwdInput);
+    const ok = await cargarFinanzas(finanzasPwdInput);
+    if (ok) {
+      setFinanzasUnlocked(true);
+      setFinanzasError("");
+      sessionStorage.setItem("finanzas_pwd", finanzasPwdInput);
+    }
+  };
+
+  // Restaurar sesión de finanzas si ya estaba desbloqueada
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? sessionStorage.getItem("finanzas_pwd") : null;
+    if (saved && tab === "finanzas" && !finanzasUnlocked) {
+      setFinanzasPwd(saved);
+      cargarFinanzas(saved).then(ok => { if (ok) setFinanzasUnlocked(true); });
+    }
+  }, [tab]);
+
+  const crearMovimiento = async () => {
+    if (!nuevoMov.importe || !nuevoMov.fecha) return;
+    const res = await fetch("/api/finanzas", { method: "POST", headers: finHeaders(), body: JSON.stringify(nuevoMov) });
+    const data = await res.json();
+    if (data.ok) {
+      setNuevoMov({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco" });
+      setCrearMov(false);
+      cargarFinanzas();
+    } else alert("Error: " + (data.error || "no se pudo guardar"));
+  };
+
+  const borrarMovimiento = async (id) => {
+    if (!confirm("¿Borrar movimiento?")) return;
+    await fetch(`/api/finanzas?id=${id}`, { method: "DELETE", headers: finHeaders() });
+    cargarFinanzas();
+  };
+
+  const crearCategoriaFin = async () => {
+    if (!nuevaCategoria.nombre.trim()) return;
+    const res = await fetch("/api/categorias-finanzas", { method: "POST", headers: finHeaders(), body: JSON.stringify(nuevaCategoria) });
+    const data = await res.json();
+    if (data.ok) {
+      setNuevaCategoria({ nombre: "", tipo: "gasto", color: "#beb0a2" });
+      cargarFinanzas();
+    } else alert("Error: " + (data.error || "no se pudo crear"));
+  };
+
+  const borrarCategoriaFin = async (id) => {
+    if (!confirm("¿Borrar categoría?")) return;
+    await fetch(`/api/categorias-finanzas?id=${id}`, { method: "DELETE", headers: finHeaders() });
+    cargarFinanzas();
+  };
+  // === fin FINANZAS ===
+
 
   const guardarNuevoMensaje = async () => {
     if (!nuevoMensaje.texto.trim() || !editando) return;
@@ -205,6 +308,7 @@ export default function App() {
   const prospectosFiltrados = prospectos.filter(p => {
     if (filtroEstado !== "all" && p.estado !== filtroEstado) return false;
     if (filtroMes !== "all" && p.mes_primer_contacto !== filtroMes) return false;
+    if (filtroOrigen !== "all" && (p.origen || "outbound") !== filtroOrigen) return false;
     if (busqueda && !p.nombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
     return true;
   });
@@ -265,7 +369,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ display: "flex", overflowX: "auto", gap: 0 }}>
-            {[["chat", "Chat"], ["prospectos", "Prospectos"], ["buscador", "🔍 Buscador"], ["plantillas", "📝 Plantillas"], ["metricas", "Métricas"], ["objetivos", "🎯 Objetivos"], ["analisis", "📊 Análisis"]].map(([id, label]) => (
+            {[["chat", "Chat"], ["prospectos", "Prospectos"], ["buscador", "🔍 Buscador"], ["plantillas", "📝 Plantillas"], ["metricas", "Métricas"], ["objetivos", "🎯 Objetivos"], ["analisis", "📊 Análisis"], ["finanzas", "💶 Finanzas"]].map(([id, label]) => (
               <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", borderBottom: tab === id ? "2px solid #beb0a2" : "2px solid transparent", color: tab === id ? "#beb0a2" : "#555", padding: "7px 13px", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{label}</button>
             ))}
           </div>
@@ -306,6 +410,15 @@ export default function App() {
               <select value={nuevoProspecto.estado} onChange={e => setNuevoProspecto(p => ({ ...p, estado: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
                 {Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
+              <select value={nuevoProspecto.origen} onChange={e => setNuevoProspecto(p => ({ ...p, origen: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                {Object.entries(ORIGENES).map(([k, v]) => <option key={k} value={k}>{v.emoji} {v.label}</option>)}
+              </select>
+              {nuevoProspecto.origen === "inbound" && (
+                <select value={nuevoProspecto.canal} onChange={e => setNuevoProspecto(p => ({ ...p, canal: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                  <option value="">Canal de entrada...</option>
+                  {CANALES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
               <textarea placeholder="Comentarios (opcional)" value={nuevoProspecto.comentarios} onChange={e => setNuevoProspecto(p => ({ ...p, comentarios: e.target.value }))} style={{ ...inputStyle, minHeight: 50, marginBottom: 8, fontFamily: "inherit" }} />
               <button onClick={crearProspectoManual} disabled={!nuevoProspecto.nombre.trim()} style={{ width: "100%", background: nuevoProspecto.nombre.trim() ? "linear-gradient(135deg, #beb0a2, #a89686)" : "#1a1a1a", border: "none", borderRadius: 8, padding: 9, color: nuevoProspecto.nombre.trim() ? "#000" : "#444", fontSize: 12, fontWeight: 700, cursor: nuevoProspecto.nombre.trim() ? "pointer" : "default" }}>Crear prospecto</button>
             </div>}
@@ -319,6 +432,10 @@ export default function App() {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
               <Pill label="Todos los estados" active={filtroEstado==="all"} onClick={() => setFiltroEstado("all")} />
               {Object.entries(ESTADOS).map(([k, v]) => <Pill key={k} label={`${v.emoji} ${v.label}`} active={filtroEstado===k} onClick={() => setFiltroEstado(k)} />)}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              <Pill label="Todos los orígenes" active={filtroOrigen==="all"} onClick={() => setFiltroOrigen("all")} />
+              {Object.entries(ORIGENES).map(([k, v]) => <Pill key={k} label={`${v.emoji} ${v.label}`} active={filtroOrigen===k} onClick={() => setFiltroOrigen(k)} />)}
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
               <Pill label="Todos los meses" active={filtroMes==="all"} onClick={() => setFiltroMes("all")} />
@@ -351,7 +468,7 @@ export default function App() {
                           <div style={{ width: 7, height: 7, borderRadius: "50%", background: cfgEstado.color, flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div>
-                            <div style={{ color: "#666", fontSize: 11 }}>{[p.perfil, p.mes_primer_contacto, p.estado === "venta" && p.importe_venta ? `💰 ${p.importe_venta}€` : null, p.num_mensajes > 0 ? `📨 ${p.num_mensajes} msg${p.num_mensajes > 1 ? "s" : ""}` : null].filter(Boolean).join(" · ")}</div>
+                            <div style={{ color: "#666", fontSize: 11 }}>{[p.perfil, p.mes_primer_contacto, p.origen === "inbound" ? `📥 ${p.canal || "inbound"}` : null, p.estado === "venta" && p.importe_venta ? `💰 ${p.importe_venta}€` : null, p.num_mensajes > 0 ? `📨 ${p.num_mensajes} msg${p.num_mensajes > 1 ? "s" : ""}` : null].filter(Boolean).join(" · ")}</div>
                           </div>
                           <div style={{ color: "#555", fontSize: 10 }}>{editando === p.id ? "▲" : "▼"}</div>
                         </div>
@@ -359,6 +476,8 @@ export default function App() {
                         {editando === p.id && (
                           <div style={{ padding: "8px 12px 12px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
                             <Campo label="Estado"><select value={p.estado} onChange={e => guardarProspecto(p.id, { estado: e.target.value })} style={inputStyle}>{Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Campo>
+                            <Campo label="Origen"><select value={p.origen || "outbound"} onChange={e => guardarProspecto(p.id, { origen: e.target.value })} style={inputStyle}>{Object.entries(ORIGENES).map(([k, v]) => <option key={k} value={k}>{v.emoji} {v.label}</option>)}</select></Campo>
+                            <Campo label="Canal"><select value={p.canal || ""} onChange={e => guardarProspecto(p.id, { canal: e.target.value || null })} style={inputStyle}><option value="">—</option>{CANALES.map(c => <option key={c} value={c}>{c}</option>)}</select></Campo>
                             <Campo label="Mes primer contacto"><select value={p.mes_primer_contacto || ""} onChange={e => guardarProspecto(p.id, { mes_primer_contacto: e.target.value || null })} style={inputStyle}><option value="">—</option>{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></Campo>
                             <Campo label="Fecha respondió"><input type="date" defaultValue={p.fecha_respuesta || ""} onBlur={e => guardarProspecto(p.id, { fecha_respuesta: e.target.value })} style={inputStyle} /></Campo>
                             <Campo label="Fecha vídeo enviado"><input type="date" defaultValue={p.fecha_video || ""} onBlur={e => guardarProspecto(p.id, { fecha_video: e.target.value })} style={inputStyle} /></Campo>
@@ -472,13 +591,14 @@ export default function App() {
           </div>}
 
           {tab === "metricas" && <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-              <Pill label="📅 Cohorte" active={vistaMetricas === "cohorte"} onClick={() => setVistaMetricas("cohorte")} />
+            <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+              <Pill label="📤 Outbound" active={vistaMetricas === "cohorte"} onClick={() => setVistaMetricas("cohorte")} />
+              <Pill label="📥 Inbound" active={vistaMetricas === "inbound"} onClick={() => setVistaMetricas("inbound")} />
               <Pill label="💶 Caja" active={vistaMetricas === "caja"} onClick={() => setVistaMetricas("caja")} />
             </div>
 
             {vistaMetricas === "cohorte" && <>
-              <p style={{ color: "#666", fontSize: 11, marginBottom: 10 }}>Embudo por mes de primer contacto.</p>
+              <p style={{ color: "#666", fontSize: 11, marginBottom: 10 }}>Embudo de prospección outbound por mes de primer contacto.</p>
               {metricasCohorte.map(m => (
                 <div key={m.mes} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 14, marginBottom: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
@@ -498,6 +618,43 @@ export default function App() {
                 </div>
               ))}
               {metricasCohorte.length === 0 && <div style={{ color: "#666", fontSize: 12, textAlign: "center", padding: 20 }}>No hay datos.</div>}
+            </>}
+
+            {vistaMetricas === "inbound" && <>
+              <p style={{ color: "#666", fontSize: 11, marginBottom: 10 }}>Leads que entraron por sí solos. Desglose por canal abajo.</p>
+              {metricasCanales.length > 0 && (
+                <div style={{ background: "rgba(190,176,162,0.06)", border: "1px solid rgba(190,176,162,0.2)", borderRadius: 12, padding: 14, marginBottom: 14 }}>
+                  <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Por canal</div>
+                  {metricasCanales.map(c => (
+                    <div key={c.canal} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto auto", gap: 10, padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 11, alignItems: "center" }}>
+                      <div style={{ textTransform: "capitalize" }}>{c.canal === "sin_canal" ? "(sin canal)" : c.canal}</div>
+                      <div style={{ color: "#aaa", fontFamily: "monospace" }}>{c.leads} leads</div>
+                      <div style={{ color: "#22c55e", fontFamily: "monospace" }}>{c.interesados} int. ({c.pct_interes}%)</div>
+                      <div style={{ color: "#beb0a2", fontFamily: "monospace" }}>{c.ventas} v. ({c.pct_cierre}%)</div>
+                      <div style={{ color: "#beb0a2", fontFamily: "monospace", fontWeight: 700 }}>{Number(c.facturacion).toLocaleString("es-ES")}€</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {metricasCohorteInbound.map(m => (
+                <div key={m.mes} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 14, marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <strong style={{ fontSize: 14, textTransform: "capitalize" }}>{m.mes}</strong>
+                    <span style={{ color: "#beb0a2", fontFamily: "monospace", fontSize: 11 }}>{m.facturacion.toLocaleString("es-ES")}€</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, fontSize: 11 }}>
+                    <Metrica titulo="Leads entrantes" valor={m.contactados} />
+                    <Metrica titulo={`Interesados (${m.pct_responden}%)`} valor={m.responden} color="#4ade80" />
+                    <Metrica titulo="Vídeos" valor={m.videos} color="#f59e0b" />
+                    <Metrica titulo={`Agendas (${m.pct_diseno_llamada}%)`} valor={m.agendas} color="#3b82f6" />
+                    <Metrica titulo={`Asist. (${m.pct_asistencia}%)`} valor={m.asistencias} color="#3b82f6" />
+                    <Metrica titulo={`Ventas (${m.pct_cierre}%)`} valor={m.ventas} color="#beb0a2" />
+                  </div>
+                </div>
+              ))}
+              {metricasCohorteInbound.length === 0 && metricasCanales.length === 0 && (
+                <div style={{ color: "#666", fontSize: 12, textAlign: "center", padding: 20 }}>Aún no hay leads inbound registrados. Marca un prospecto como "Inbound" al darlo de alta.</div>
+              )}
             </>}
 
             {vistaMetricas === "caja" && <>
@@ -562,6 +719,138 @@ export default function App() {
                 </div>
               </div>
             ))}
+          </div>}
+
+          {tab === "finanzas" && <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            {!finanzasUnlocked ? (
+              <div style={{ maxWidth: 320, margin: "40px auto", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(190,176,162,0.2)", borderRadius: 12, padding: 20 }}>
+                <div style={{ fontSize: 28, textAlign: "center", marginBottom: 8 }}>🔒</div>
+                <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", marginBottom: 4 }}>Acceso a Finanzas</div>
+                <div style={{ fontSize: 11, color: "#888", textAlign: "center", marginBottom: 16 }}>Introduce la contraseña para ver gastos, ingresos y caja.</div>
+                <input type="password" autoFocus value={finanzasPwdInput} onChange={e => { setFinanzasPwdInput(e.target.value); setFinanzasError(""); }} onKeyDown={e => e.key === "Enter" && unlockFinanzas()} placeholder="Contraseña" style={{ ...inputStyle, marginBottom: 8 }} />
+                {finanzasError && <div style={{ color: "#f87171", fontSize: 11, marginBottom: 8 }}>{finanzasError}</div>}
+                <button onClick={unlockFinanzas} style={{ width: "100%", background: "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 8, padding: 9, color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Desbloquear</button>
+              </div>
+            ) : !finanzasData ? (
+              <div style={{ color: "#666", textAlign: "center", padding: 30 }}>Cargando finanzas...</div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
+                  <div style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: 12 }}>
+                    <div style={{ fontSize: 10, color: "#888" }}>Ingresos totales</div>
+                    <div style={{ fontFamily: "monospace", fontSize: 16, color: "#4ade80", fontWeight: 700 }}>{finanzasData.resumen.total_ingresos.toLocaleString("es-ES")}€</div>
+                  </div>
+                  <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 10, padding: 12 }}>
+                    <div style={{ fontSize: 10, color: "#888" }}>Gastos totales</div>
+                    <div style={{ fontFamily: "monospace", fontSize: 16, color: "#f87171", fontWeight: 700 }}>{finanzasData.resumen.total_gastos.toLocaleString("es-ES")}€</div>
+                  </div>
+                  <div style={{ background: "rgba(190,176,162,0.1)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 12 }}>
+                    <div style={{ fontSize: 10, color: "#888" }}>Caja neta</div>
+                    <div style={{ fontFamily: "monospace", fontSize: 16, color: finanzasData.resumen.caja_neta >= 0 ? "#beb0a2" : "#f87171", fontWeight: 700 }}>{finanzasData.resumen.caja_neta.toLocaleString("es-ES")}€</div>
+                  </div>
+                </div>
+
+                {finanzasData.por_cuenta && finanzasData.por_cuenta.length > 0 && (
+                  <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
+                    <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Saldo por cuenta</div>
+                    {finanzasData.por_cuenta.map(c => (
+                      <div key={c.cuenta} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 12 }}>
+                        <span style={{ textTransform: "capitalize" }}>{c.cuenta === "sin_cuenta" ? "(sin asignar)" : c.cuenta}</span>
+                        <span style={{ fontFamily: "monospace", color: c.saldo >= 0 ? "#beb0a2" : "#f87171", fontWeight: 700 }}>{c.saldo.toLocaleString("es-ES")}€</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
+                  <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Por mes</div>
+                  {finanzasData.por_mes.length === 0 && <div style={{ color: "#666", fontSize: 11, textAlign: "center", padding: 10 }}>No hay movimientos.</div>}
+                  {finanzasData.por_mes.map(m => (
+                    <div key={m.mes} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 11, alignItems: "center" }}>
+                      <div style={{ fontFamily: "monospace", color: "#aaa" }}>{m.mes}</div>
+                      <div style={{ fontFamily: "monospace", color: "#4ade80" }}>+{m.ingresos.toLocaleString("es-ES")}€</div>
+                      <div style={{ fontFamily: "monospace", color: "#f87171" }}>-{m.gastos.toLocaleString("es-ES")}€</div>
+                      <div style={{ fontFamily: "monospace", color: m.neto >= 0 ? "#beb0a2" : "#f87171", fontWeight: 700, textAlign: "right" }}>{m.neto.toLocaleString("es-ES")}€</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <button onClick={() => setCrearMov(!crearMov)} style={{ flex: 1, background: crearMov ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 8, padding: 9, color: crearMov ? "#beb0a2" : "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{crearMov ? "✕ Cancelar" : "➕ Nuevo movimiento"}</button>
+                  <button onClick={() => setCrearCategoria(!crearCategoria)} style={{ background: "rgba(190,176,162,0.12)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 8, padding: "9px 12px", color: "#beb0a2", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>🏷️ Categorías</button>
+                </div>
+
+                {crearMov && (
+                  <div style={{ background: "rgba(190,176,162,0.05)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                      <button onClick={() => setNuevoMov(m => ({ ...m, tipo: "ingreso", categoria: "" }))} style={{ flex: 1, background: nuevoMov.tipo === "ingreso" ? "rgba(34,197,94,0.2)" : "rgba(0,0,0,0.3)", border: `1px solid ${nuevoMov.tipo === "ingreso" ? "#4ade80" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: 8, color: nuevoMov.tipo === "ingreso" ? "#4ade80" : "#888", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Ingreso</button>
+                      <button onClick={() => setNuevoMov(m => ({ ...m, tipo: "gasto", categoria: "" }))} style={{ flex: 1, background: nuevoMov.tipo === "gasto" ? "rgba(248,113,113,0.2)" : "rgba(0,0,0,0.3)", border: `1px solid ${nuevoMov.tipo === "gasto" ? "#f87171" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: 8, color: nuevoMov.tipo === "gasto" ? "#f87171" : "#888", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>− Gasto</button>
+                    </div>
+                    <input type="date" value={nuevoMov.fecha} onChange={e => setNuevoMov(m => ({ ...m, fecha: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
+                    <input type="number" placeholder="Importe (€)" value={nuevoMov.importe} onChange={e => setNuevoMov(m => ({ ...m, importe: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
+                    <select value={nuevoMov.categoria} onChange={e => setNuevoMov(m => ({ ...m, categoria: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                      <option value="">Categoría...</option>
+                      {categoriasFin.filter(c => c.tipo === nuevoMov.tipo).map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                    </select>
+                    <select value={nuevoMov.cuenta} onChange={e => setNuevoMov(m => ({ ...m, cuenta: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                      <option value="banco">Banco</option>
+                      <option value="efectivo">Efectivo</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                    <input placeholder="Descripción (opcional)" value={nuevoMov.descripcion} onChange={e => setNuevoMov(m => ({ ...m, descripcion: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
+                    <button onClick={crearMovimiento} disabled={!nuevoMov.importe || !nuevoMov.fecha} style={{ width: "100%", background: nuevoMov.importe && nuevoMov.fecha ? "linear-gradient(135deg, #beb0a2, #a89686)" : "#1a1a1a", border: "none", borderRadius: 8, padding: 9, color: nuevoMov.importe && nuevoMov.fecha ? "#000" : "#444", fontSize: 12, fontWeight: 700, cursor: nuevoMov.importe && nuevoMov.fecha ? "pointer" : "default" }}>Guardar</button>
+                  </div>
+                )}
+
+                {crearCategoria && (
+                  <div style={{ background: "rgba(190,176,162,0.05)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                    <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Gestión de categorías</div>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                      <input placeholder="Nombre categoría" value={nuevaCategoria.nombre} onChange={e => setNuevaCategoria(c => ({ ...c, nombre: e.target.value }))} style={inputStyle} />
+                      <select value={nuevaCategoria.tipo} onChange={e => setNuevaCategoria(c => ({ ...c, tipo: e.target.value }))} style={{ ...inputStyle, width: 100 }}>
+                        <option value="ingreso">Ingreso</option>
+                        <option value="gasto">Gasto</option>
+                      </select>
+                      <button onClick={crearCategoriaFin} disabled={!nuevaCategoria.nombre.trim()} style={{ background: nuevaCategoria.nombre.trim() ? "#beb0a2" : "#1a1a1a", color: nuevaCategoria.nombre.trim() ? "#000" : "#444", border: "none", borderRadius: 6, padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: nuevaCategoria.nombre.trim() ? "pointer" : "default" }}>+</button>
+                    </div>
+                    {categoriasFin.map(c => (
+                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 11 }}>
+                        <span>{c.tipo === "ingreso" ? "🟢" : "🔴"} {c.nombre}</span>
+                        <button onClick={() => borrarCategoriaFin(c.id)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 11 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  <Pill label="Todos" active={filtroFinTipo === "all"} onClick={() => setFiltroFinTipo("all")} />
+                  <Pill label="🟢 Ingresos" active={filtroFinTipo === "ingreso"} onClick={() => setFiltroFinTipo("ingreso")} />
+                  <Pill label="🔴 Gastos" active={filtroFinTipo === "gasto"} onClick={() => setFiltroFinTipo("gasto")} />
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                  <Pill label="Todos los meses" active={filtroFinMes === "all"} onClick={() => setFiltroFinMes("all")} />
+                  {finanzasData.por_mes.map(m => <Pill key={m.mes} label={m.mes} active={filtroFinMes === m.mes} onClick={() => setFiltroFinMes(m.mes)} />)}
+                </div>
+
+                <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Movimientos</div>
+                {finanzasData.movimientos.filter(m => {
+                  if (filtroFinTipo !== "all" && m.tipo !== filtroFinTipo) return false;
+                  if (filtroFinMes !== "all" && !m.fecha.startsWith(filtroFinMes)) return false;
+                  return true;
+                }).map(m => (
+                  <div key={m.id} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, padding: "9px 12px", marginBottom: 5, display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: m.tipo === "ingreso" ? "#4ade80" : "#f87171", flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{m.descripcion || m.categoria || "(sin descripción)"}</div>
+                      <div style={{ color: "#666", fontSize: 10 }}>{m.fecha} · {m.categoria || "sin cat."} · {m.cuenta || "—"}{m.origen === "venta_crm" ? " · 🔗 CRM" : ""}</div>
+                    </div>
+                    <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: m.tipo === "ingreso" ? "#4ade80" : "#f87171" }}>{m.tipo === "ingreso" ? "+" : "−"}{Number(m.importe).toLocaleString("es-ES")}€</div>
+                    {m.origen !== "venta_crm" && <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12 }}>✕</button>}
+                  </div>
+                ))}
+              </>
+            )}
           </div>}
 
         </div>
