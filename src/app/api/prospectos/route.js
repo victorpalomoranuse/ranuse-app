@@ -25,9 +25,32 @@ export async function GET() {
 
   return Response.json({
     prospectos,
-    metricasCohorte: calcularMetricasCohorte(prospectos),
-    metricasCaja:    calcularMetricasCaja(prospectos),
+    metricasCohorte:         calcularMetricasCohorte(prospectos.filter(p => (p.origen || "outbound") === "outbound")),
+    metricasCohorteInbound:  calcularMetricasCohorte(prospectos.filter(p => p.origen === "inbound")),
+    metricasCanales:         calcularMetricasCanales(prospectos.filter(p => p.origen === "inbound")),
+    metricasCaja:            calcularMetricasCaja(prospectos),
   });
+}
+
+function calcularMetricasCanales(prospectos) {
+  const porCanal = {};
+  for (const p of prospectos) {
+    const canal = p.canal || "sin_canal";
+    if (!porCanal[canal]) porCanal[canal] = { canal, leads: 0, interesados: 0, ventas: 0, facturacion: 0 };
+    porCanal[canal].leads += 1;
+    if (p.estado === "interesado" || p.estado === "venta") porCanal[canal].interesados += 1;
+    if (p.estado === "venta") {
+      porCanal[canal].ventas += 1;
+      porCanal[canal].facturacion += Number(p.importe_venta) || 0;
+    }
+  }
+  return Object.values(porCanal)
+    .map(c => ({
+      ...c,
+      pct_interes: c.leads > 0 ? Number(((c.interesados / c.leads) * 100).toFixed(1)) : 0,
+      pct_cierre:  c.leads > 0 ? Number(((c.ventas       / c.leads) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.leads - a.leads);
 }
 
 function calcularMetricasCohorte(prospectos) {
@@ -95,6 +118,7 @@ export async function PATCH(req) {
     "nombre", "perfil", "liga", "idioma", "estado", "comentarios", "notas", "mes_primer_contacto",
     "fecha_respuesta", "fecha_video", "fecha_llamada1", "fecha_llamada2",
     "asistio_llamada1", "fecha_venta", "importe_venta",
+    "origen", "canal",
   ];
   for (const c of campos) {
     if (body[c] !== undefined) update[c] = body[c] === "" ? null : body[c];
@@ -102,8 +126,45 @@ export async function PATCH(req) {
   if (body.estado === "venta" && body.fecha_venta === undefined) {
     update.fecha_venta = new Date().toISOString().slice(0, 10);
   }
+  // Si el prospecto pasa a "interesado" y no tiene fecha_respuesta, la fijamos a hoy.
+  // Necesario para que la auto-transición a "enfriado" funcione tras N seguimientos.
+  if (body.estado === "interesado" && body.fecha_respuesta === undefined) {
+    const { data: actual } = await supabaseAdmin
+      .from("prospectos").select("fecha_respuesta").eq("id", body.id).single();
+    if (actual && !actual.fecha_respuesta) {
+      update.fecha_respuesta = new Date().toISOString().slice(0, 10);
+    }
+  }
   const result = await supabaseAdmin.from("prospectos").update(update).eq("id", body.id).select().single();
   if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
+
+  // Sync con módulo de finanzas: si pasa a "venta" o se edita su importe, crea/actualiza
+  // un movimiento de ingreso enlazado al prospecto.
+  if (result.data && result.data.estado === "venta" && result.data.importe_venta) {
+    const { data: existente } = await supabaseAdmin
+      .from("movimientos")
+      .select("id")
+      .eq("prospecto_id", result.data.id)
+      .eq("origen", "venta_crm")
+      .maybeSingle();
+    const payload = {
+      tipo: "ingreso",
+      fecha: result.data.fecha_venta || new Date().toISOString().slice(0, 10),
+      importe: Number(result.data.importe_venta),
+      categoria: "Venta diseño",
+      descripcion: `Venta CRM: ${result.data.nombre}`,
+      origen: "venta_crm",
+      prospecto_id: result.data.id,
+      cuenta: "banco",
+      updated_at: new Date().toISOString(),
+    };
+    if (existente) {
+      await supabaseAdmin.from("movimientos").update(payload).eq("id", existente.id);
+    } else {
+      await supabaseAdmin.from("movimientos").insert(payload);
+    }
+  }
+
   return Response.json({ ok: true, prospecto: result.data });
 }
 
@@ -123,6 +184,8 @@ export async function POST(req) {
       comentarios: body.comentarios || null,
       notas: body.notas || null,
       mes_primer_contacto: body.mes_primer_contacto || null,
+      origen: body.origen || "outbound",
+      canal: body.canal || null,
     })
     .select()
     .single();
