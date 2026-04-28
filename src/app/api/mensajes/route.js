@@ -24,11 +24,17 @@ export async function GET(req) {
   }
 
   // Análisis global: tasa de respuesta por plantilla
+  // Solo se cuentan prospectos OUTBOUND. Los inbound vienen ya con interés mostrado y
+  // distorsionarían las tasas de respuesta de la prospección.
   const { data: plantillas } = await supabaseAdmin.from("plantillas").select("id, nombre");
-  const { data: prospectos } = await supabaseAdmin.from("prospectos").select("id, estado");
+  const { data: prospectos } = await supabaseAdmin.from("prospectos").select("id, estado, origen");
 
   const prospectoEstado = {};
-  for (const p of (prospectos || [])) prospectoEstado[p.id] = p.estado;
+  const prospectoOutbound = new Set();
+  for (const p of (prospectos || [])) {
+    prospectoEstado[p.id] = p.estado;
+    if ((p.origen || "outbound") === "outbound") prospectoOutbound.add(p.id);
+  }
 
   const porPlantilla = {};
   for (const pl of (plantillas || [])) {
@@ -38,6 +44,7 @@ export async function GET(req) {
 
   for (const m of mensajes) {
     if (m.es_seguimiento) continue;
+    if (!prospectoOutbound.has(m.prospecto_id)) continue;  // ignora mensajes a inbound
     const key = m.plantilla_id || "sin_plantilla";
     if (!porPlantilla[key]) porPlantilla[key] = { nombre: m.tipo_mensaje || "Sin plantilla", enviados: 0, respondidos: 0, interesados: 0, ventas: 0 };
     porPlantilla[key].enviados += 1;
