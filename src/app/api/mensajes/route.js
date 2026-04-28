@@ -1,5 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
 
+// Umbrales de seguimientos sin respuesta:
+// - DESCARTE: leido/no_leido + N seguimientos sin contestar -> descartado
+// - ENFRIADO: interesado + N seguimientos tras su fecha_respuesta -> enfriado
+const SEGUIMIENTOS_PARA_DESCARTE = 4;
+const SEGUIMIENTOS_PARA_ENFRIADO = 4;
+
 // GET ?prospecto_id=X  -> mensajes de un prospecto
 // GET                  -> todos + análisis por plantilla
 export async function GET(req) {
@@ -93,7 +99,37 @@ export async function POST(req) {
     .single();
 
   if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
-  return Response.json({ ok: true, mensaje: result.data });
+
+  // Auto-transición de estado:
+  //   leido / no_leido + N seguimientos -> descartado
+  //   interesado       + N tras fecha_respuesta -> enfriado
+  let prospectoActualizado = null;
+  const { data: prospecto } = await supabaseAdmin
+    .from("prospectos").select("estado, fecha_respuesta").eq("id", body.prospecto_id).single();
+
+  if (prospecto) {
+    let nuevoEstado = null;
+    if (prospecto.estado === "leido" || prospecto.estado === "no_leido") {
+      const secuenciaFinal = result.data.secuencia || siguienteSecuencia;
+      if (secuenciaFinal >= SEGUIMIENTOS_PARA_DESCARTE + 1) nuevoEstado = "descartado";
+    } else if (prospecto.estado === "interesado" && prospecto.fecha_respuesta) {
+      const { count } = await supabaseAdmin
+        .from("mensajes")
+        .select("id", { count: "exact", head: true })
+        .eq("prospecto_id", body.prospecto_id)
+        .gt("enviado_en", prospecto.fecha_respuesta);
+      if ((count || 0) >= SEGUIMIENTOS_PARA_ENFRIADO) nuevoEstado = "enfriado";
+    }
+    if (nuevoEstado) {
+      const upd = await supabaseAdmin
+        .from("prospectos")
+        .update({ estado: nuevoEstado, updated_at: new Date().toISOString() })
+        .eq("id", body.prospecto_id).select().single();
+      if (!upd.error) prospectoActualizado = upd.data;
+    }
+  }
+
+  return Response.json({ ok: true, mensaje: result.data, prospecto: prospectoActualizado });
 }
 
 export async function DELETE(req) {
