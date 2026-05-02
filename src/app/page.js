@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import CalendarioTab from "./CalendarioTab";
+import PresupuestosTab from "./PresupuestosTab";
 
 const LIGAS = ["Hypermotion", "LaLiga", "Liga F", "Kings League", "Serie A", "Ligue 1", "Liga Portugal", "Bundesliga"];
 const PERFILES = ["Jugadores", "Porteros", "Retirados", "Entrenadores", "Jugadoras", "Árbitros", "Kings League"];
@@ -369,7 +371,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ display: "flex", overflowX: "auto", gap: 0 }}>
-            {[["chat", "Chat"], ["prospectos", "Prospectos"], ["buscador", "🔍 Buscador"], ["plantillas", "📝 Plantillas"], ["metricas", "Métricas"], ["objetivos", "🎯 Objetivos"], ["analisis", "📊 Análisis"], ["finanzas", "💶 Finanzas"]].map(([id, label]) => (
+            {[["chat", "Chat"], ["prospectos", "Prospectos"], ["calendario", "📅 Calendario"], ["presupuestos", "📋 Presupuestos"], ["buscador", "🔍 Buscador"], ["plantillas", "📝 Plantillas"], ["metricas", "Métricas"], ["objetivos", "🎯 Objetivos"], ["analisis", "📊 Análisis"], ["finanzas", "💶 Finanzas"]].map(([id, label]) => (
               <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", borderBottom: tab === id ? "2px solid #beb0a2" : "2px solid transparent", color: tab === id ? "#beb0a2" : "#555", padding: "7px 13px", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{label}</button>
             ))}
           </div>
@@ -523,6 +525,9 @@ export default function App() {
               );
             })}
           </div>}
+
+          {tab === "calendario" && <CalendarioTab />}
+          {tab === "presupuestos" && <PresupuestosTab />}
 
           {tab === "buscador" && <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             <p style={{ color: "#666", fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>La IA busca jugadores reales <strong style={{ color: "#beb0a2" }}>en BeSoccer y Transfermarkt</strong> que no están en tu base de datos.</p>
