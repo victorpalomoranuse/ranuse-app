@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
-import type { Presupuesto, PresupuestoPartida, PartidaCatalogo, CompanySettings, PresupuestoEstado } from '@/lib/types';
-import { calcularPartida, calcularPresupuesto, formatEUR } from '@/lib/types';
+import type { Presupuesto, PresupuestoPartida, PartidaCatalogo, CompanySettings, PresupuestoEstado } from '../../../lib/types';
+import { calcularPartida, calcularPresupuesto, formatEUR } from '../../../lib/types';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
