@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
-import type { Presupuesto, PresupuestoEstado, PresupuestoPartida } from '@/lib/types';
-import { calcularPresupuesto, formatEUR } from '@/lib/types';
+import type { Presupuesto, PresupuestoEstado, PresupuestoPartida } from '../../lib/types';
+import { calcularPresupuesto, formatEUR } from '../../lib/types';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
