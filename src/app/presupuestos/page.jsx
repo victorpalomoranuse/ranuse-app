@@ -10,21 +10,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const ESTADO_COLORS = {
-  borrador: '#888',
-  enviado: '#3498db',
-  aceptado: '#7fd87f',
-  rechazado: '#e74c3c',
-  caducado: '#666',
-};
-
-const ESTADO_LABELS = {
-  borrador: 'Borrador',
-  enviado: 'Enviado',
-  aceptado: 'Aceptado',
-  rechazado: 'Rechazado',
-  caducado: 'Caducado',
-};
+const ESTADO_COLORS = { borrador: '#888', enviado: '#3498db', aceptado: '#7fd87f', rechazado: '#e74c3c', caducado: '#666' };
+const ESTADO_LABELS = { borrador: 'Borrador', enviado: 'Enviado', aceptado: 'Aceptado', rechazado: 'Rechazado', caducado: 'Caducado' };
 
 export default function PresupuestosPage() {
   const [presupuestos, setPresupuestos] = useState([]);
@@ -82,14 +69,12 @@ export default function PresupuestosPage() {
       fecha: new Date().toISOString().slice(0, 10),
     }).select().single();
     if (!nuevo) return;
-    // Duplicar capítulos y guardar mapeo old->new id
     const capMap = {};
     for (const cap of (capitulos || [])) {
       const { id: oldId, created_at, presupuesto_id, ...capRest } = cap;
       const { data: newCap } = await supabase.from('presupuesto_capitulos').insert({ ...capRest, presupuesto_id: nuevo.id }).select().single();
       if (newCap) capMap[oldId] = newCap.id;
     }
-    // Duplicar partidas con el nuevo capitulo_id
     if (partidas && partidas.length) {
       const nuevasPartidas = partidas.map(p => {
         const { id: _, created_at, presupuesto_id, capitulo_id, ...rest } = p;
@@ -119,15 +104,13 @@ export default function PresupuestosPage() {
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px 60px' }}>
-        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 48, fontWeight: 400, letterSpacing: '0.04em', margin: 0 }}>
-              Presupuestos
-            </h1>
+            <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 48, fontWeight: 400, letterSpacing: '0.04em', margin: 0 }}>Presupuestos</h1>
             <div style={{ height: 1, background: '#beb0a2', width: 60, marginTop: 12 }} />
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link href="/presupuestos/capitulos" style={btnSecundario}>Capítulos</Link>
             <Link href="/presupuestos/catalogo" style={btnSecundario}>Catálogo</Link>
             <Link href="/presupuestos/empresa" style={btnSecundario}>Mi empresa</Link>
             <button onClick={crearNuevo} disabled={creating} style={{ ...btnPrimario, opacity: creating ? 0.5 : 1 }}>
@@ -136,34 +119,25 @@ export default function PresupuestosPage() {
           </div>
         </div>
 
-        {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
           <StatCard label="Total presupuestos" value={String(presupuestos.length)} />
           <StatCard label="Pendientes (enviados)" value={formatEUR(totalPendientes)} color="#3498db" />
           <StatCard label="Aceptados (acumulado)" value={formatEUR(totalAceptados)} color="#beb0a2" highlight />
         </div>
 
-        {/* Filtros */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {['todos', 'borrador', 'enviado', 'aceptado', 'rechazado'].map(e => (
             <button key={e} onClick={() => setFilterEstado(e)} style={{
               background: filterEstado === e ? '#beb0a2' : 'transparent',
               color: filterEstado === e ? '#0a0a0a' : '#888',
               border: '1px solid ' + (filterEstado === e ? '#beb0a2' : 'rgba(255,255,255,0.15)'),
-              borderRadius: 100,
-              padding: '6px 14px',
-              fontSize: 11,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              fontWeight: 500
+              borderRadius: 100, padding: '6px 14px', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 500
             }}>
               {e === 'todos' ? 'Todos' : ESTADO_LABELS[e]}
             </button>
           ))}
         </div>
 
-        {/* Lista */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>Cargando...</div>
         ) : filtered.length === 0 ? (
@@ -171,10 +145,7 @@ export default function PresupuestosPage() {
         ) : (
           <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 100px 100px 130px 130px 180px', padding: '12px 20px', background: 'rgba(255,255,255,0.03)', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888', fontWeight: 600 }}>
-              <div>Nº</div>
-              <div>Cliente</div>
-              <div>Fecha</div>
-              <div>Estado</div>
+              <div>Nº</div><div>Cliente</div><div>Fecha</div><div>Estado</div>
               <div style={{ textAlign: 'right' }}>Total</div>
               <div style={{ textAlign: 'right', opacity: 0.6 }}>Beneficio</div>
               <div></div>
@@ -192,7 +163,7 @@ export default function PresupuestosPage() {
                 <div style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{formatEUR(p.total)}</div>
                 <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: '#666' }}>{formatEUR(p.beneficio)}</div>
                 <div style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                  <Link href={`/presupuestos/${p.id}`} style={{ fontSize: 11, color: '#beb0a2', textDecoration: 'none', padding: '4px 10px', border: '1px solid rgba(190,176,162,0.3)', borderRadius: 3, letterSpacing: '0.05em' }}>Editar</Link>
+                  <Link href={`/presupuestos/${p.id}`} style={{ fontSize: 11, color: '#beb0a2', textDecoration: 'none', padding: '4px 10px', border: '1px solid rgba(190,176,162,0.3)', borderRadius: 3 }}>Editar</Link>
                   <button onClick={() => duplicar(p.id)} style={{ fontSize: 11, color: '#888', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 3, padding: '4px 10px', cursor: 'pointer' }}>Duplicar</button>
                   <button onClick={() => eliminar(p.id)} style={{ fontSize: 14, color: '#666', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>×</button>
                 </div>
@@ -205,44 +176,12 @@ export default function PresupuestosPage() {
   );
 }
 
-const btnPrimario = {
-  background: '#beb0a2',
-  color: '#0a0a0a',
-  border: 'none',
-  borderRadius: 4,
-  padding: '11px 24px',
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  cursor: 'pointer',
-  textDecoration: 'none',
-  display: 'inline-block'
-};
-
-const btnSecundario = {
-  background: 'transparent',
-  color: '#beb0a2',
-  border: '1px solid rgba(190,176,162,0.4)',
-  borderRadius: 4,
-  padding: '10px 20px',
-  fontSize: 12,
-  fontWeight: 500,
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  cursor: 'pointer',
-  textDecoration: 'none',
-  display: 'inline-block'
-};
+const btnPrimario = { background: '#beb0a2', color: '#0a0a0a', border: 'none', borderRadius: 4, padding: '11px 24px', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' };
+const btnSecundario = { background: 'transparent', color: '#beb0a2', border: '1px solid rgba(190,176,162,0.4)', borderRadius: 4, padding: '10px 20px', fontSize: 12, fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' };
 
 function StatCard({ label, value, color, highlight }) {
   return (
-    <div style={{
-      border: highlight ? '1px solid #beb0a2' : '1px solid rgba(255,255,255,0.1)',
-      borderRadius: 8,
-      padding: '20px 24px',
-      background: highlight ? 'rgba(190,176,162,0.05)' : 'transparent'
-    }}>
+    <div style={{ border: highlight ? '1px solid #beb0a2' : '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '20px 24px', background: highlight ? 'rgba(190,176,162,0.05)' : 'transparent' }}>
       <div style={{ fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888', marginBottom: 8 }}>{label}</div>
       <div style={{ fontFamily: highlight ? "'Cormorant Garamond', serif" : 'inherit', fontSize: highlight ? 32 : 24, fontWeight: 500, color: color || '#fff' }}>{value}</div>
     </div>
