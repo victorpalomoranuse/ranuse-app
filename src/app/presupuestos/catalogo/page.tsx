@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
-import type { PartidaCatalogo } from '@/lib/types';
-import { formatEUR } from '@/lib/types';
+import type { PartidaCatalogo } from '../../../lib/types';
+import { formatEUR } from '../../../lib/types';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
