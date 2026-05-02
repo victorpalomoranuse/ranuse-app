@@ -12,15 +12,37 @@ const DIAS = ["L","M","X","J","V","S","D"];
 
 const inputStyle = { width: "100%", background: "rgba(0,0,0,0.4)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, fontSize: 12, padding: "6px 8px", outline: "none" };
 
+// ===== Helpers de fecha (timezone-safe) =====
+// Usamos siempre el día/mes/año LOCAL para evitar desfases con UTC.
+function toYMD(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Fecha de hoy en formato YYYY-MM-DD según hora local
+function todayYMD() {
+  return toYMD(new Date());
+}
+
+// Extrae el YYYY-MM-DD de un timestamp ISO mostrando la fecha LOCAL
+// (no la UTC, que es lo que daría .slice(0,10))
+function isoToLocalYMD(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return toYMD(d);
+}
+
 export default function CalendarioTab() {
-  const [vista, setVista] = useState("calendario"); // "calendario" | "tareas"
+  const [vista, setVista] = useState("calendario");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [tasks, setTasks] = useState([]);
   const [events, setEvents] = useState([]);
   const [prospectos, setProspectos] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showNew, setShowNew] = useState(null); // null | "task" | "event"
+  const [showNew, setShowNew] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [filterTasks, setFilterTasks] = useState("pendientes");
 
@@ -57,12 +79,12 @@ export default function CalendarioTab() {
   }, [currentMonth]);
 
   function tasksForDay(d) {
-    const ymd = d.toISOString().slice(0, 10);
+    const ymd = toYMD(d);
     return tasks.filter(t => t.fecha === ymd);
   }
   function eventsForDay(d) {
-    const ymd = d.toISOString().slice(0, 10);
-    return events.filter(e => e.fecha_inicio.slice(0, 10) === ymd);
+    const ymd = toYMD(d);
+    return events.filter(e => isoToLocalYMD(e.fecha_inicio) === ymd);
   }
 
   function changeMonth(delta) {
@@ -72,10 +94,10 @@ export default function CalendarioTab() {
   }
 
   const filteredTasks = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayYMD();
     const weekEnd = new Date();
     weekEnd.setDate(weekEnd.getDate() + 7);
-    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    const weekEndStr = toYMD(weekEnd);
     return tasks.filter(t => {
       if (filterTasks === "pendientes") return !t.completada;
       if (filterTasks === "hoy") return t.fecha === today && !t.completada;
@@ -106,20 +128,18 @@ export default function CalendarioTab() {
     loadAll();
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayYMD();
   const tareasPendientes = tasks.filter(t => !t.completada).length;
   const tareasHoy = tasks.filter(t => t.fecha === today && !t.completada).length;
   const tareasAtrasadas = tasks.filter(t => t.fecha && t.fecha < today && !t.completada).length;
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-      {/* Botones nuevo */}
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         <button onClick={() => setShowNew("task")} style={{ flex: 1, background: "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 10, padding: 10, color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Tarea</button>
         <button onClick={() => setShowNew("event")} style={{ flex: 1, background: "rgba(190,176,162,0.12)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 10, color: "#beb0a2", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Evento</button>
       </div>
 
-      {/* Stats rápidos */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginBottom: 12 }}>
         <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 8, textAlign: "center" }}>
           <div style={{ color: "#666", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5 }}>Pendientes</div>
@@ -135,7 +155,6 @@ export default function CalendarioTab() {
         </div>
       </div>
 
-      {/* Switch vista */}
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         <button onClick={() => setVista("calendario")} style={{ flex: 1, background: vista === "calendario" ? "rgba(190,176,162,0.2)" : "rgba(255,255,255,0.05)", border: `1px solid ${vista === "calendario" ? "#beb0a2" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, padding: 8, color: vista === "calendario" ? "#beb0a2" : "#777", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>📅 Calendario</button>
         <button onClick={() => setVista("tareas")} style={{ flex: 1, background: vista === "tareas" ? "rgba(190,176,162,0.2)" : "rgba(255,255,255,0.05)", border: `1px solid ${vista === "tareas" ? "#beb0a2" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, padding: 8, color: vista === "tareas" ? "#beb0a2" : "#777", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>✓ Lista de tareas</button>
@@ -156,7 +175,7 @@ export default function CalendarioTab() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3 }}>
             {daysOfMonth.map((d, i) => {
               if (!d) return <div key={i} style={{ aspectRatio: "1" }} />;
-              const ymd = d.toISOString().slice(0, 10);
+              const ymd = toYMD(d);
               const isToday = ymd === today;
               const dayTasks = tasksForDay(d);
               const dayEvents = eventsForDay(d);
@@ -255,7 +274,6 @@ export default function CalendarioTab() {
         </div>
       )}
 
-      {/* Panel día seleccionado */}
       {selectedDate && (
         <DayPanel
           date={selectedDate}
@@ -272,7 +290,6 @@ export default function CalendarioTab() {
         />
       )}
 
-      {/* Modal nuevo */}
       {showNew && (
         <NewItemModal
           type={showNew}
@@ -362,7 +379,7 @@ function DayPanel({ date, tasks, events, prospectos, projects, onClose, onToggle
 function NewItemModal({ type, prospectos, projects, initialDate, onClose, onSaved }) {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [fecha, setFecha] = useState(initialDate.toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(toYMD(initialDate));
   const [hora, setHora] = useState("");
   const [horaFin, setHoraFin] = useState("");
   const [todoElDia, setTodoElDia] = useState(false);
@@ -372,11 +389,24 @@ function NewItemModal({ type, prospectos, projects, initialDate, onClose, onSave
   const [projectId, setProjectId] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Construye un Date LOCAL a partir de "YYYY-MM-DD" y "HH:MM"
+  // y devuelve su ISO. Esto preserva la intención del usuario:
+  // si el usuario marca el día 7 a las 09:00 hora de Madrid,
+  // se guarda exactamente ese instante (que en UTC son las 07:00).
+  function buildLocalISO(ymd, hhmm) {
+    const [y, m, d] = ymd.split("-").map(Number);
+    const [hh, mm] = (hhmm || "00:00").split(":").map(Number);
+    const local = new Date(y, m - 1, d, hh, mm, 0);
+    return local.toISOString();
+  }
+
   async function save() {
     if (!titulo.trim()) return;
     setSaving(true);
     try {
       if (type === "task") {
+        // tasks.fecha es un DATE (sin hora) → guardamos la cadena tal cual,
+        // sin pasar por Date para evitar conversiones de zona horaria.
         await supabase.from("tasks").insert({
           titulo,
           descripcion: descripcion || null,
@@ -387,12 +417,15 @@ function NewItemModal({ type, prospectos, projects, initialDate, onClose, onSave
           project_id: projectId || null,
         });
       } else {
+        // events.fecha_inicio es TIMESTAMPTZ → construimos el ISO desde
+        // hora local del usuario (no desde "YYYY-MM-DDTHH:MM:SS" plano,
+        // que se interpretaría como UTC).
         const startISO = todoElDia
-          ? new Date(fecha + "T00:00:00").toISOString()
-          : new Date(fecha + "T" + (hora || "09:00") + ":00").toISOString();
+          ? buildLocalISO(fecha, "00:00")
+          : buildLocalISO(fecha, hora || "09:00");
         const endISO = todoElDia
-          ? new Date(fecha + "T23:59:59").toISOString()
-          : horaFin ? new Date(fecha + "T" + horaFin + ":00").toISOString() : null;
+          ? buildLocalISO(fecha, "23:59")
+          : horaFin ? buildLocalISO(fecha, horaFin) : null;
         await supabase.from("events").insert({
           titulo,
           descripcion: descripcion || null,
