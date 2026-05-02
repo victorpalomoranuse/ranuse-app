@@ -1,6 +1,27 @@
 // Cálculos compartidos para presupuestos
-// Importar desde: import { calcularPartida, calcularCapitulo, calcularPresupuesto, formatEUR } from '@/lib/presupuestos';
+// Importar desde: import { ... } from '@/lib/presupuestos';
 
+// =====================================================================
+// MARGEN ↔ PVP (markup: PVP = coste × (1 + margen/100))
+// =====================================================================
+export function pvpDesdeMargen(coste, margenPct) {
+  return (Number(coste) || 0) * (1 + (Number(margenPct) || 0) / 100);
+}
+export function margenDesdeCostePvp(coste, pvp) {
+  const c = Number(coste) || 0;
+  if (c <= 0) return 0;
+  return (((Number(pvp) || 0) - c) / c) * 100;
+}
+// Beneficio real = % sobre el PVP (lo que realmente te llevas de cada euro vendido)
+export function beneficioRealPct(coste, pvp) {
+  const p = Number(pvp) || 0;
+  if (p <= 0) return 0;
+  return (((p - (Number(coste) || 0)) / p) * 100);
+}
+
+// =====================================================================
+// CÁLCULOS DE PARTIDA / CAPÍTULO / PRESUPUESTO
+// =====================================================================
 export function calcularPartida(p) {
   const total_bruto = (Number(p.cantidad) || 0) * (Number(p.pvp) || 0);
   const descuento_partida = total_bruto * ((Number(p.descuento_pct) || 0) / 100);
@@ -42,6 +63,9 @@ export function calcularPresupuesto(partidas, descuento_global_pct) {
   };
 }
 
+// =====================================================================
+// FORMATO
+// =====================================================================
 export function formatEUR(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
 }
