@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import type { Task, CalendarEvent, Project } from '@/lib/types';
+import type { Task, CalendarEvent, Project } from '../../lib/types';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
