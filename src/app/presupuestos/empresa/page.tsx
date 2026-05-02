@@ -54,7 +54,6 @@ export default function EmpresaPage() {
       const { data: urlData } = supabase.storage.from('company').getPublicUrl(fileName);
       const url = urlData.publicUrl;
 
-      // Borrar logo anterior si existía
       if (settings?.logo_url) {
         const oldName = settings.logo_url.split('/').pop();
         if (oldName && oldName !== fileName) {
@@ -118,7 +117,6 @@ export default function EmpresaPage() {
           </p>
         </div>
 
-        {/* LOGO */}
         <Section title="Logotipo" subtitle="Aparecerá en la cabecera del PDF. Recomendado: PNG con fondo transparente, mínimo 400×400px.">
           <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{
@@ -367,4 +365,3 @@ function SelectField({ label, value, onChange, options }) {
       </select>
     </div>
   );
-}
