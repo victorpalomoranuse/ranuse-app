@@ -106,6 +106,7 @@ function calcularFiscal(movimientos) {
 export default function FinanzasTab({
   finanzasUnlocked, finanzasPwdInput, setFinanzasPwdInput, finanzasError, setFinanzasError, unlockFinanzas,
   finanzasData, categoriasFin,
+  cuadresCaja = [], crearCuadre, borrarCuadre,
   crearMov, setCrearMov, nuevoMov, setNuevoMov, crearMovimiento, borrarMovimiento,
   crearCategoria, setCrearCategoria, nuevaCategoria, setNuevaCategoria, crearCategoriaFin, borrarCategoriaFin,
 }) {
@@ -113,6 +114,8 @@ export default function FinanzasTab({
   const [filtroQ, setFiltroQ] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("all");
   const [verCategorias, setVerCategorias] = useState(false);
+  const [verCuadres, setVerCuadres] = useState(false);
+  const [nuevoCuadre, setNuevoCuadre] = useState({ fecha: new Date().toISOString().slice(0, 10), cuenta: "banco", saldo_real: "", nota: "" });
 
   // Años disponibles
   const anos = useMemo(() => {
@@ -295,8 +298,79 @@ export default function FinanzasTab({
         <button onClick={() => setCrearMov(!crearMov)} style={{ flex: 1, background: crearMov ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 8, padding: 9, color: crearMov ? "#beb0a2" : "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
           {crearMov ? "✕ Cancelar" : "➕ Añadir"}
         </button>
+        <button onClick={() => setVerCuadres(!verCuadres)} style={{ background: verCuadres ? "rgba(255,255,255,0.08)" : "rgba(190,176,162,0.1)", border: "1px solid rgba(190,176,162,0.25)", borderRadius: 8, padding: "9px 12px", color: "#beb0a2", fontSize: 11, fontWeight: 600, cursor: "pointer" }} title="Cuadres de caja">⚖️</button>
         <button onClick={() => setVerCategorias(!verCategorias)} style={{ background: "rgba(190,176,162,0.1)", border: "1px solid rgba(190,176,162,0.25)", borderRadius: 8, padding: "9px 12px", color: "#beb0a2", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>🏷️</button>
       </div>
+
+      {/* CUADRES DE CAJA */}
+      {verCuadres && (
+        <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "#beb0a2", fontWeight: 700, marginBottom: 10 }}>⚖️ Cuadres de caja</div>
+
+          {/* Saldos calculados vs reales */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+            {["banco", "caja"].map(cuenta => {
+              const calculado = cuenta === "banco" ? fiscal.banco : fiscal.caja;
+              const ultimoCuadre = cuadresCaja.find(c => c.cuenta === cuenta);
+              const diferencia = ultimoCuadre ? Number(ultimoCuadre.saldo_real) - calculado : null;
+              return (
+                <div key={cuenta} style={{ background: "rgba(0,0,0,0.3)", borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{cuenta}</div>
+                  <div style={{ fontSize: 10, color: "#666", marginBottom: 2 }}>Calculado</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: calculado >= 0 ? "#beb0a2" : "#f87171", marginBottom: 6 }}>{fmt(calculado)}€</div>
+                  {ultimoCuadre && <>
+                    <div style={{ fontSize: 10, color: "#666", marginBottom: 2 }}>Último cuadre · {ultimoCuadre.fecha}</div>
+                    <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "#e0e0e0", marginBottom: 4 }}>{fmt(ultimoCuadre.saldo_real)}€</div>
+                    <div style={{ fontSize: 11, color: diferencia === 0 ? "#4ade80" : diferencia > 0 ? "#f59e0b" : "#f87171", fontWeight: 600 }}>
+                      {diferencia === 0 ? "✓ Cuadrado" : diferencia > 0 ? `+${fmt(diferencia)}€ de más` : `${fmt(diferencia)}€ de menos`}
+                    </div>
+                  </>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Formulario nuevo cuadre */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 10 }}>
+            <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Registrar cuadre</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <select value={nuevoCuadre.cuenta} onChange={e => setNuevoCuadre(c => ({ ...c, cuenta: e.target.value }))} style={{ ...inputStyle, width: 90 }}>
+                <option value="banco">Banco</option>
+                <option value="caja">Caja</option>
+              </select>
+              <input type="date" value={nuevoCuadre.fecha} onChange={e => setNuevoCuadre(c => ({ ...c, fecha: e.target.value }))} style={inputStyle} />
+            </div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <input type="number" placeholder="Saldo real (€)" value={nuevoCuadre.saldo_real} onChange={e => setNuevoCuadre(c => ({ ...c, saldo_real: e.target.value }))} style={inputStyle} />
+              <input placeholder="Nota (opcional)" value={nuevoCuadre.nota} onChange={e => setNuevoCuadre(c => ({ ...c, nota: e.target.value }))} style={inputStyle} />
+            </div>
+            <button onClick={async () => { await crearCuadre(nuevoCuadre); setNuevoCuadre(c => ({ ...c, saldo_real: "", nota: "" })); }} disabled={!nuevoCuadre.saldo_real}
+              style={{ width: "100%", background: nuevoCuadre.saldo_real ? "linear-gradient(135deg, #beb0a2, #a89686)" : "#1a1a1a", border: "none", borderRadius: 6, padding: 8, color: nuevoCuadre.saldo_real ? "#000" : "#444", fontSize: 12, fontWeight: 700, cursor: nuevoCuadre.saldo_real ? "pointer" : "default" }}>
+              Guardar cuadre
+            </button>
+          </div>
+
+          {/* Historial */}
+          {cuadresCaja.length > 0 && (
+            <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 10 }}>
+              <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Historial</div>
+              {cuadresCaja.slice(0, 10).map(c => (
+                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 11 }}>
+                  <div>
+                    <span style={{ color: "#888", textTransform: "capitalize" }}>{c.cuenta}</span>
+                    <span style={{ color: "#555" }}> · {c.fecha}</span>
+                    {c.nota && <span style={{ color: "#555" }}> · {c.nota}</span>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontFamily: "monospace", color: "#beb0a2", fontWeight: 600 }}>{fmt(c.saldo_real)}€</span>
+                    <button onClick={() => borrarCuadre(c.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 11 }}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* FORMULARIO NUEVO MOVIMIENTO */}
       {crearMov && (
