@@ -166,6 +166,8 @@ export default function FinanzasTab({
       .map(([nombre, d]) => ({ nombre, ...d, margen: d.ingresos - d.gastos }))
       .sort((a, b) => b.ingresos - a.ingresos);
   }, [movFiltrados]);
+
+  if (!finanzasUnlocked) return (
     <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
       <div style={{ maxWidth: 320, margin: "40px auto", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(190,176,162,0.2)", borderRadius: 12, padding: 20 }}>
         <div style={{ fontSize: 28, textAlign: "center", marginBottom: 8 }}>🔒</div>
