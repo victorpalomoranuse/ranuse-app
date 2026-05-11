@@ -29,6 +29,9 @@ export default function PresupuestoEditorPage() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [showCapPicker, setShowCapPicker] = useState(false);
   const [showPartidasPicker, setShowPartidasPicker] = useState(null); // capId al que añadir
+  const [modoFiscal, setModoFiscal] = useState('sin_iva'); // 'sin_iva' | 'con_irpf_iva'
+  const [pctIrpf, setPctIrpf] = useState(15);
+  const [pctIva, setPctIva] = useState(21);
 
   useEffect(() => { loadAll(); }, [id]);
 
@@ -367,13 +370,97 @@ export default function PresupuestoEditorPage() {
           </div>
           {totales.descuento_global > 0 && <ResumenLinea label="" valor={`− ${formatEUR(totales.descuento_global)}`} muted small />}
 
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', marginTop: 12, paddingTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#beb0a2' }}>Total</span>
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: '#beb0a2' }}>{formatEUR(totales.base_imponible)}</span>
+          {/* MODO FISCAL TOGGLE */}
+          <div style={{ marginTop: 20, marginBottom: 16 }}>
+            <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#888', marginBottom: 10 }}>Presentación de precio</div>
+            <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)' }}>
+              <button
+                onClick={() => setModoFiscal('sin_iva')}
+                style={{
+                  flex: 1, padding: '8px 6px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: modoFiscal === 'sin_iva' ? '#beb0a2' : 'transparent',
+                  color: modoFiscal === 'sin_iva' ? '#0a0a0a' : '#666',
+                }}
+              >Sin IVA</button>
+              <button
+                onClick={() => setModoFiscal('con_irpf_iva')}
+                style={{
+                  flex: 1, padding: '8px 6px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  border: 'none', borderLeft: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', transition: 'all 0.15s',
+                  background: modoFiscal === 'con_irpf_iva' ? '#beb0a2' : 'transparent',
+                  color: modoFiscal === 'con_irpf_iva' ? '#0a0a0a' : '#666',
+                }}
+              >IRPF + IVA</button>
             </div>
-            <div style={{ fontSize: 10, color: '#666', textAlign: 'right', marginTop: 4 }}>Sin IVA · Se factura aparte</div>
+
+            {modoFiscal === 'con_irpf_iva' && (
+              <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 9, color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>IRPF %</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="number" value={pctIrpf} onChange={e => setPctIrpf(parseFloat(e.target.value) || 0)}
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 3, padding: '4px 6px', fontSize: 12, textAlign: 'right' }} />
+                    <span style={{ color: '#666', fontSize: 11 }}>%</span>
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 9, color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>IVA %</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="number" value={pctIva} onChange={e => setPctIva(parseFloat(e.target.value) || 0)}
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 3, padding: '4px 6px', fontSize: 12, textAlign: 'right' }} />
+                    <span style={{ color: '#666', fontSize: 11 }}>%</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* TOTALES */}
+          {modoFiscal === 'sin_iva' ? (
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#beb0a2' }}>Total</span>
+                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: '#beb0a2' }}>{formatEUR(totales.base_imponible)}</span>
+              </div>
+              <div style={{ fontSize: 10, color: '#666', textAlign: 'right', marginTop: 4 }}>Sin IVA · Se factura aparte</div>
+            </div>
+          ) : (() => {
+            const base = totales.base_imponible;
+            const retencion = base * (pctIrpf / 100);
+            const iva = base * (pctIva / 100);
+            const totalCliente = base - retencion + iva;
+            return (
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 16 }}>
+                <ResumenLinea label="Base imponible" valor={formatEUR(base)} />
+                <ResumenLinea label={`IVA (${pctIva}%)`} valor={`+ ${formatEUR(iva)}`} />
+                <ResumenLinea label={`Ret. IRPF (${pctIrpf}%)`} valor={`− ${formatEUR(retencion)}`} muted />
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 10, paddingTop: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <div>
+                      <span style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#beb0a2' }}>Total cliente</span>
+                      <div style={{ fontSize: 9, color: '#666', marginTop: 2 }}>Lo que paga el cliente</div>
+                    </div>
+                    <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500, color: '#beb0a2' }}>{formatEUR(totalCliente)}</span>
+                  </div>
+                  <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(190,176,162,0.06)', borderRadius: 4, border: '1px solid rgba(190,176,162,0.15)' }}>
+                    <div style={{ fontSize: 9, color: '#888', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Ingresos reales tuyos</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                      <span style={{ color: '#aaa' }}>Base − IRPF recuperado en declaración</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                      <span style={{ fontSize: 11, color: '#888' }}>Cobras ahora</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 13, color: '#7fd87f', fontWeight: 600 }}>{formatEUR(totalCliente)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                      <span style={{ fontSize: 11, color: '#888' }}>Ret. que recuperas (IRPF)</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#aaa' }}>+ {formatEUR(retencion)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {showInternal && (
             <div style={{ marginTop: 28, padding: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
