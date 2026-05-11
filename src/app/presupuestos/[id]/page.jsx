@@ -227,7 +227,7 @@ export default function PresupuestoEditorPage() {
       const autoTableMod = await import('jspdf-autotable');
       const autoTable = autoTableMod.default;
       const { generarPDF } = await import('@/lib/pdfGenerator');
-      await generarPDF({ jsPDF, autoTable, presupuesto, capitulos, partidas, settings, totales });
+      await generarPDF({ jsPDF, autoTable, presupuesto, capitulos, partidas, settings, totales, modoFiscal, pctIrpf, pctIva });
     } catch (err) {
       console.error(err);
       alert('Error generando PDF: ' + err.message);
