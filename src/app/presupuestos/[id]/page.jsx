@@ -33,6 +33,21 @@ export default function PresupuestoEditorPage() {
   const [pctIrpf, setPctIrpf] = useState(15);
   const [pctIva, setPctIva] = useState(21);
 
+  async function updateModoFiscal(modo) {
+    setModoFiscal(modo);
+    await supabase.from('presupuestos').update({ modo_fiscal: modo }).eq('id', id);
+  }
+  async function updatePctIrpf(val) {
+    const v = parseFloat(val) || 0;
+    setPctIrpf(v);
+    await supabase.from('presupuestos').update({ pct_irpf: v }).eq('id', id);
+  }
+  async function updatePctIva(val) {
+    const v = parseFloat(val) || 0;
+    setPctIva(v);
+    await supabase.from('presupuestos').update({ pct_iva: v }).eq('id', id);
+  }
+
   useEffect(() => { loadAll(); }, [id]);
 
   async function loadAll() {
@@ -51,6 +66,12 @@ export default function PresupuestoEditorPage() {
     setSettings(conf.data);
     setCapitulosCatalogo(capsCat.data || []);
     setPartidasCatalogo(partsCat.data || []);
+    // Cargar modo fiscal desde BD
+    if (pres.data) {
+      setModoFiscal(pres.data.modo_fiscal || 'sin_iva');
+      setPctIrpf(pres.data.pct_irpf ?? 15);
+      setPctIva(pres.data.pct_iva ?? 21);
+    }
     setLoading(false);
   }
 
@@ -375,7 +396,7 @@ export default function PresupuestoEditorPage() {
             <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#888', marginBottom: 10 }}>Presentación de precio</div>
             <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)' }}>
               <button
-                onClick={() => setModoFiscal('sin_iva')}
+                onClick={() => updateModoFiscal('sin_iva')}
                 style={{
                   flex: 1, padding: '8px 6px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                   border: 'none', cursor: 'pointer', transition: 'all 0.15s',
@@ -384,7 +405,7 @@ export default function PresupuestoEditorPage() {
                 }}
               >Sin IVA</button>
               <button
-                onClick={() => setModoFiscal('con_irpf_iva')}
+                onClick={() => updateModoFiscal('con_irpf_iva')}
                 style={{
                   flex: 1, padding: '8px 6px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                   border: 'none', borderLeft: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', transition: 'all 0.15s',
@@ -399,7 +420,7 @@ export default function PresupuestoEditorPage() {
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 9, color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>IRPF %</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input type="number" value={pctIrpf} onChange={e => setPctIrpf(parseFloat(e.target.value) || 0)}
+                    <input type="number" value={pctIrpf} onChange={e => updatePctIrpf(e.target.value)}
                       style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 3, padding: '4px 6px', fontSize: 12, textAlign: 'right' }} />
                     <span style={{ color: '#666', fontSize: 11 }}>%</span>
                   </div>
@@ -407,7 +428,7 @@ export default function PresupuestoEditorPage() {
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 9, color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>IVA %</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input type="number" value={pctIva} onChange={e => setPctIva(parseFloat(e.target.value) || 0)}
+                    <input type="number" value={pctIva} onChange={e => updatePctIva(e.target.value)}
                       style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 3, padding: '4px 6px', fontSize: 12, textAlign: 'right' }} />
                     <span style={{ color: '#666', fontSize: 11 }}>%</span>
                   </div>
