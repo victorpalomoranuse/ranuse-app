@@ -151,7 +151,21 @@ export default function FinanzasTab({
     };
   }, [movFiltrados]);
 
-  if (!finanzasUnlocked) return (
+  // Proyectos
+  const porProyecto = useMemo(() => {
+    const map = {};
+    for (const m of movFiltrados) {
+      if (!m.proyecto) continue;
+      const p = m.proyecto.trim();
+      if (!map[p]) map[p] = { ingresos: 0, gastos: 0, fechaInicio: m.fecha };
+      if (m.tipo === "ingreso") map[p].ingresos += Number(m.importe) || 0;
+      else map[p].gastos += Number(m.importe) || 0;
+      if (m.fecha < map[p].fechaInicio) map[p].fechaInicio = m.fecha;
+    }
+    return Object.entries(map)
+      .map(([nombre, d]) => ({ nombre, ...d, margen: d.ingresos - d.gastos }))
+      .sort((a, b) => b.ingresos - a.ingresos);
+  }, [movFiltrados]);
     <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
       <div style={{ maxWidth: 320, margin: "40px auto", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(190,176,162,0.2)", borderRadius: 12, padding: 20 }}>
         <div style={{ fontSize: 28, textAlign: "center", marginBottom: 8 }}>🔒</div>
@@ -359,6 +373,8 @@ export default function FinanzasTab({
             <option value="tarjeta">Tarjeta</option>
           </select>
 
+          <input placeholder="Proyecto / cliente (opcional)" value={nuevoMov.proyecto || ""} onChange={e => setNuevoMov(m => ({ ...m, proyecto: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
+
           <input placeholder="Descripción (opcional)" value={nuevoMov.descripcion || ""} onChange={e => setNuevoMov(m => ({ ...m, descripcion: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
 
           <button onClick={crearMovimiento} disabled={!nuevoMov.importe || !nuevoMov.fecha}
@@ -390,6 +406,29 @@ export default function FinanzasTab({
         </div>
       )}
 
+      {/* PROYECTOS / CLIENTES */}
+      {porProyecto.length > 0 && (
+        <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "#beb0a2", fontWeight: 700, marginBottom: 10 }}>Proyectos · clientes</div>
+          {porProyecto.map(p => (
+            <div key={p.nombre} style={{ padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#e0e0e0" }}>{p.nombre}</span>
+                <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€</span>
+              </div>
+              <div style={{ display: "flex", gap: 12, fontSize: 10 }}>
+                <span style={{ color: "#666" }}>desde {p.fechaInicio}</span>
+                <span style={{ color: "#4ade80" }}>+{fmt(p.ingresos)}€</span>
+                {p.gastos > 0 && <span style={{ color: "#f87171" }}>−{fmt(p.gastos)}€</span>}
+                <span style={{ color: p.margen >= 0 ? "#4ade80" : "#f87171" }}>
+                  {p.ingresos > 0 ? `${Math.round((p.margen / p.ingresos) * 100)}% margen` : ""}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* FILTRO TIPO + LISTA MOVIMIENTOS */}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
         {[["all","Todos"],["ingreso","Ingresos"],["gasto","Gastos"]].map(([v, l]) => (
@@ -413,6 +452,7 @@ export default function FinanzasTab({
               <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.descripcion || m.categoria || "(sin descripción)"}</div>
               <div style={{ color: "#555", fontSize: 10, marginTop: 1 }}>
                 {m.fecha} · {m.categoria || "—"} · {m.cuenta || "banco"}
+                {m.proyecto ? <span style={{ color: "#beb0a2" }}> · {m.proyecto}</span> : null}
                 {tipoLabel ? <span style={{ color: "#444" }}> · {tipoLabel}</span> : null}
                 {m.irpf_retenido > 0 ? <span style={{ color: "#888" }}> · ret. {fmt(m.irpf_retenido)}€</span> : null}
                 {m.origen === "venta_crm" ? <span style={{ color: "#555" }}> · CRM</span> : null}
