@@ -27,7 +27,7 @@ async function loadImageAsBase64(url) {
   }
 }
 
-export async function generarPDF({ jsPDF, autoTable, presupuesto, capitulos, partidas, settings, totales }) {
+export async function generarPDF({ jsPDF, autoTable, presupuesto, capitulos, partidas, settings, totales, modoFiscal = 'sin_iva', pctIrpf = 15, pctIva = 21 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
   // A4: 210 x 297 mm
@@ -239,26 +239,73 @@ export async function generarPDF({ jsPDF, autoTable, presupuesto, capitulos, par
     doc.text(`Descuento ${presupuesto.descuento_global_pct}%`, totBoxX, totLineY);
     doc.text(`− ${formatEUR(totales.descuento_global)}`, totBoxX + totBoxW, totLineY, { align: 'right' });
     totLineY += 5;
+    doc.setFontSize(9);
+    doc.setTextColor(...COLOR_NEGRO);
   }
 
-  // Línea separadora
-  doc.setDrawColor(...COLOR_NEGRO);
-  doc.setLineWidth(0.5);
-  doc.line(totBoxX, totLineY, totBoxX + totBoxW, totLineY);
-  totLineY += 5;
+  if (modoFiscal === 'con_irpf_iva') {
+    // Base imponible
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...COLOR_GRIS);
+    doc.text('Base imponible', totBoxX, totLineY);
+    doc.text(formatEUR(totales.base_imponible), totBoxX + totBoxW, totLineY, { align: 'right' });
+    totLineY += 5;
 
-  // TOTAL
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(...COLOR_NEGRO);
-  doc.text('TOTAL', totBoxX, totLineY);
-  doc.text(formatEUR(totales.base_imponible), totBoxX + totBoxW, totLineY, { align: 'right' });
-  totLineY += 4;
+    // IVA
+    const importeIva = totales.base_imponible * (pctIva / 100);
+    doc.text(`IVA (${pctIva}%)`, totBoxX, totLineY);
+    doc.text(`+ ${formatEUR(importeIva)}`, totBoxX + totBoxW, totLineY, { align: 'right' });
+    totLineY += 5;
 
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Importes sin IVA. IVA aplicable en factura.', totBoxX + totBoxW, totLineY, { align: 'right' });
+    // Retención IRPF
+    const importeRetencion = totales.base_imponible * (pctIrpf / 100);
+    doc.setTextColor(...COLOR_GRIS);
+    doc.text(`Retención IRPF (${pctIrpf}%)`, totBoxX, totLineY);
+    doc.text(`− ${formatEUR(importeRetencion)}`, totBoxX + totBoxW, totLineY, { align: 'right' });
+    totLineY += 5;
+
+    // Línea separadora
+    doc.setDrawColor(...COLOR_NEGRO);
+    doc.setLineWidth(0.5);
+    doc.line(totBoxX, totLineY, totBoxX + totBoxW, totLineY);
+    totLineY += 5;
+
+    // Total cliente
+    const totalCliente = totales.base_imponible - importeRetencion + importeIva;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(...COLOR_NEGRO);
+    doc.text('TOTAL', totBoxX, totLineY);
+    doc.text(formatEUR(totalCliente), totBoxX + totBoxW, totLineY, { align: 'right' });
+    totLineY += 4;
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`IVA ${pctIva}% incluido · Ret. IRPF ${pctIrpf}% aplicada`, totBoxX + totBoxW, totLineY, { align: 'right' });
+
+  } else {
+    // Modo sin IVA (original)
+    // Línea separadora
+    doc.setDrawColor(...COLOR_NEGRO);
+    doc.setLineWidth(0.5);
+    doc.line(totBoxX, totLineY, totBoxX + totBoxW, totLineY);
+    totLineY += 5;
+
+    // TOTAL
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(...COLOR_NEGRO);
+    doc.text('TOTAL', totBoxX, totLineY);
+    doc.text(formatEUR(totales.base_imponible), totBoxX + totBoxW, totLineY, { align: 'right' });
+    totLineY += 4;
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Importes sin IVA. IVA aplicable en factura.', totBoxX + totBoxW, totLineY, { align: 'right' });
+  }
 
   cursorY = totLineY + 10;
 
