@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import CalendarioTab from "./CalendarioTab";
 import PresupuestosTab from "./PresupuestosTab";
+import FinanzasTab from "./FinanzasTab";
 
 const LIGAS = ["Hypermotion", "LaLiga", "Liga F", "Kings League", "Serie A", "Ligue 1", "Liga Portugal", "Bundesliga"];
 const PERFILES = ["Jugadores", "Porteros", "Retirados", "Entrenadores", "Jugadoras", "Árbitros", "Kings League"];
@@ -61,7 +62,7 @@ export default function App() {
   const [finanzasData, setFinanzasData] = useState(null);
   const [categoriasFin, setCategoriasFin] = useState([]);
   const [crearMov, setCrearMov] = useState(false);
-  const [nuevoMov, setNuevoMov] = useState({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco" });
+  const [nuevoMov, setNuevoMov] = useState({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco", iva_incluido: false, pct_iva_mov: 21, deducible: true, irpf_retenido: 0, tipo_ingreso: "con_iva_con_retencion", tipo_gasto: "iva_deducible" });
   const [crearCategoria, setCrearCategoria] = useState(false);
   const [nuevaCategoria, setNuevaCategoria] = useState({ nombre: "", tipo: "gasto", color: "#beb0a2" });
   const [filtroFinTipo, setFiltroFinTipo] = useState("all");
@@ -231,7 +232,7 @@ export default function App() {
     const res = await fetch("/api/finanzas", { method: "POST", headers: finHeaders(), body: JSON.stringify(nuevoMov) });
     const data = await res.json();
     if (data.ok) {
-      setNuevoMov({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco" });
+      setNuevoMov({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco", iva_incluido: false, pct_iva_mov: 21, deducible: true, irpf_retenido: 0, tipo_ingreso: "con_iva_con_retencion", tipo_gasto: "iva_deducible" });
       setCrearMov(false);
       cargarFinanzas();
     } else alert("Error: " + (data.error || "no se pudo guardar"));
@@ -726,137 +727,16 @@ export default function App() {
             ))}
           </div>}
 
-          {tab === "finanzas" && <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-            {!finanzasUnlocked ? (
-              <div style={{ maxWidth: 320, margin: "40px auto", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(190,176,162,0.2)", borderRadius: 12, padding: 20 }}>
-                <div style={{ fontSize: 28, textAlign: "center", marginBottom: 8 }}>🔒</div>
-                <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", marginBottom: 4 }}>Acceso a Finanzas</div>
-                <div style={{ fontSize: 11, color: "#888", textAlign: "center", marginBottom: 16 }}>Introduce la contraseña para ver gastos, ingresos y caja.</div>
-                <input type="password" autoFocus value={finanzasPwdInput} onChange={e => { setFinanzasPwdInput(e.target.value); setFinanzasError(""); }} onKeyDown={e => e.key === "Enter" && unlockFinanzas()} placeholder="Contraseña" style={{ ...inputStyle, marginBottom: 8 }} />
-                {finanzasError && <div style={{ color: "#f87171", fontSize: 11, marginBottom: 8 }}>{finanzasError}</div>}
-                <button onClick={unlockFinanzas} style={{ width: "100%", background: "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 8, padding: 9, color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Desbloquear</button>
-              </div>
-            ) : !finanzasData ? (
-              <div style={{ color: "#666", textAlign: "center", padding: 30 }}>Cargando finanzas...</div>
-            ) : (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
-                  <div style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: 12 }}>
-                    <div style={{ fontSize: 10, color: "#888" }}>Ingresos totales</div>
-                    <div style={{ fontFamily: "monospace", fontSize: 16, color: "#4ade80", fontWeight: 700 }}>{finanzasData.resumen.total_ingresos.toLocaleString("es-ES")}€</div>
-                  </div>
-                  <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 10, padding: 12 }}>
-                    <div style={{ fontSize: 10, color: "#888" }}>Gastos totales</div>
-                    <div style={{ fontFamily: "monospace", fontSize: 16, color: "#f87171", fontWeight: 700 }}>{finanzasData.resumen.total_gastos.toLocaleString("es-ES")}€</div>
-                  </div>
-                  <div style={{ background: "rgba(190,176,162,0.1)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 12 }}>
-                    <div style={{ fontSize: 10, color: "#888" }}>Caja neta</div>
-                    <div style={{ fontFamily: "monospace", fontSize: 16, color: finanzasData.resumen.caja_neta >= 0 ? "#beb0a2" : "#f87171", fontWeight: 700 }}>{finanzasData.resumen.caja_neta.toLocaleString("es-ES")}€</div>
-                  </div>
-                </div>
-
-                {finanzasData.por_cuenta && finanzasData.por_cuenta.length > 0 && (
-                  <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
-                    <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Saldo por cuenta</div>
-                    {finanzasData.por_cuenta.map(c => (
-                      <div key={c.cuenta} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 12 }}>
-                        <span style={{ textTransform: "capitalize" }}>{c.cuenta === "sin_cuenta" ? "(sin asignar)" : c.cuenta}</span>
-                        <span style={{ fontFamily: "monospace", color: c.saldo >= 0 ? "#beb0a2" : "#f87171", fontWeight: 700 }}>{c.saldo.toLocaleString("es-ES")}€</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
-                  <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Por mes</div>
-                  {finanzasData.por_mes.length === 0 && <div style={{ color: "#666", fontSize: 11, textAlign: "center", padding: 10 }}>No hay movimientos.</div>}
-                  {finanzasData.por_mes.map(m => (
-                    <div key={m.mes} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 11, alignItems: "center" }}>
-                      <div style={{ fontFamily: "monospace", color: "#aaa" }}>{m.mes}</div>
-                      <div style={{ fontFamily: "monospace", color: "#4ade80" }}>+{m.ingresos.toLocaleString("es-ES")}€</div>
-                      <div style={{ fontFamily: "monospace", color: "#f87171" }}>-{m.gastos.toLocaleString("es-ES")}€</div>
-                      <div style={{ fontFamily: "monospace", color: m.neto >= 0 ? "#beb0a2" : "#f87171", fontWeight: 700, textAlign: "right" }}>{m.neto.toLocaleString("es-ES")}€</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                  <button onClick={() => setCrearMov(!crearMov)} style={{ flex: 1, background: crearMov ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 8, padding: 9, color: crearMov ? "#beb0a2" : "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{crearMov ? "✕ Cancelar" : "➕ Nuevo movimiento"}</button>
-                  <button onClick={() => setCrearCategoria(!crearCategoria)} style={{ background: "rgba(190,176,162,0.12)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 8, padding: "9px 12px", color: "#beb0a2", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>🏷️ Categorías</button>
-                </div>
-
-                {crearMov && (
-                  <div style={{ background: "rgba(190,176,162,0.05)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                      <button onClick={() => setNuevoMov(m => ({ ...m, tipo: "ingreso", categoria: "" }))} style={{ flex: 1, background: nuevoMov.tipo === "ingreso" ? "rgba(34,197,94,0.2)" : "rgba(0,0,0,0.3)", border: `1px solid ${nuevoMov.tipo === "ingreso" ? "#4ade80" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: 8, color: nuevoMov.tipo === "ingreso" ? "#4ade80" : "#888", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Ingreso</button>
-                      <button onClick={() => setNuevoMov(m => ({ ...m, tipo: "gasto", categoria: "" }))} style={{ flex: 1, background: nuevoMov.tipo === "gasto" ? "rgba(248,113,113,0.2)" : "rgba(0,0,0,0.3)", border: `1px solid ${nuevoMov.tipo === "gasto" ? "#f87171" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, padding: 8, color: nuevoMov.tipo === "gasto" ? "#f87171" : "#888", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>− Gasto</button>
-                    </div>
-                    <input type="date" value={nuevoMov.fecha} onChange={e => setNuevoMov(m => ({ ...m, fecha: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
-                    <input type="number" placeholder="Importe (€)" value={nuevoMov.importe} onChange={e => setNuevoMov(m => ({ ...m, importe: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
-                    <select value={nuevoMov.categoria} onChange={e => setNuevoMov(m => ({ ...m, categoria: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
-                      <option value="">Categoría...</option>
-                      {categoriasFin.filter(c => c.tipo === nuevoMov.tipo).map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-                    </select>
-                    <select value={nuevoMov.cuenta} onChange={e => setNuevoMov(m => ({ ...m, cuenta: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
-                      <option value="banco">Banco</option>
-                      <option value="efectivo">Efectivo</option>
-                      <option value="tarjeta">Tarjeta</option>
-                      <option value="otro">Otro</option>
-                    </select>
-                    <input placeholder="Descripción (opcional)" value={nuevoMov.descripcion} onChange={e => setNuevoMov(m => ({ ...m, descripcion: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
-                    <button onClick={crearMovimiento} disabled={!nuevoMov.importe || !nuevoMov.fecha} style={{ width: "100%", background: nuevoMov.importe && nuevoMov.fecha ? "linear-gradient(135deg, #beb0a2, #a89686)" : "#1a1a1a", border: "none", borderRadius: 8, padding: 9, color: nuevoMov.importe && nuevoMov.fecha ? "#000" : "#444", fontSize: 12, fontWeight: 700, cursor: nuevoMov.importe && nuevoMov.fecha ? "pointer" : "default" }}>Guardar</button>
-                  </div>
-                )}
-
-                {crearCategoria && (
-                  <div style={{ background: "rgba(190,176,162,0.05)", border: "1px solid rgba(190,176,162,0.3)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
-                    <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Gestión de categorías</div>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                      <input placeholder="Nombre categoría" value={nuevaCategoria.nombre} onChange={e => setNuevaCategoria(c => ({ ...c, nombre: e.target.value }))} style={inputStyle} />
-                      <select value={nuevaCategoria.tipo} onChange={e => setNuevaCategoria(c => ({ ...c, tipo: e.target.value }))} style={{ ...inputStyle, width: 100 }}>
-                        <option value="ingreso">Ingreso</option>
-                        <option value="gasto">Gasto</option>
-                      </select>
-                      <button onClick={crearCategoriaFin} disabled={!nuevaCategoria.nombre.trim()} style={{ background: nuevaCategoria.nombre.trim() ? "#beb0a2" : "#1a1a1a", color: nuevaCategoria.nombre.trim() ? "#000" : "#444", border: "none", borderRadius: 6, padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: nuevaCategoria.nombre.trim() ? "pointer" : "default" }}>+</button>
-                    </div>
-                    {categoriasFin.map(c => (
-                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 11 }}>
-                        <span>{c.tipo === "ingreso" ? "🟢" : "🔴"} {c.nombre}</span>
-                        <button onClick={() => borrarCategoriaFin(c.id)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 11 }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                  <Pill label="Todos" active={filtroFinTipo === "all"} onClick={() => setFiltroFinTipo("all")} />
-                  <Pill label="🟢 Ingresos" active={filtroFinTipo === "ingreso"} onClick={() => setFiltroFinTipo("ingreso")} />
-                  <Pill label="🔴 Gastos" active={filtroFinTipo === "gasto"} onClick={() => setFiltroFinTipo("gasto")} />
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                  <Pill label="Todos los meses" active={filtroFinMes === "all"} onClick={() => setFiltroFinMes("all")} />
-                  {finanzasData.por_mes.map(m => <Pill key={m.mes} label={m.mes} active={filtroFinMes === m.mes} onClick={() => setFiltroFinMes(m.mes)} />)}
-                </div>
-
-                <div style={{ color: "#beb0a2", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Movimientos</div>
-                {finanzasData.movimientos.filter(m => {
-                  if (filtroFinTipo !== "all" && m.tipo !== filtroFinTipo) return false;
-                  if (filtroFinMes !== "all" && !m.fecha.startsWith(filtroFinMes)) return false;
-                  return true;
-                }).map(m => (
-                  <div key={m.id} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, padding: "9px 12px", marginBottom: 5, display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: m.tipo === "ingreso" ? "#4ade80" : "#f87171", flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{m.descripcion || m.categoria || "(sin descripción)"}</div>
-                      <div style={{ color: "#666", fontSize: 10 }}>{m.fecha} · {m.categoria || "sin cat."} · {m.cuenta || "—"}{m.origen === "venta_crm" ? " · 🔗 CRM" : ""}</div>
-                    </div>
-                    <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: m.tipo === "ingreso" ? "#4ade80" : "#f87171" }}>{m.tipo === "ingreso" ? "+" : "−"}{Number(m.importe).toLocaleString("es-ES")}€</div>
-                    {m.origen !== "venta_crm" && <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12 }}>✕</button>}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>}
+          {tab === "finanzas" && <FinanzasTab
+            finanzasUnlocked={finanzasUnlocked} finanzasPwdInput={finanzasPwdInput} setFinanzasPwdInput={setFinanzasPwdInput}
+            finanzasError={finanzasError} setFinanzasError={setFinanzasError} unlockFinanzas={unlockFinanzas}
+            finanzasData={finanzasData} categoriasFin={categoriasFin}
+            crearMov={crearMov} setCrearMov={setCrearMov} nuevoMov={nuevoMov} setNuevoMov={setNuevoMov}
+            crearMovimiento={crearMovimiento} borrarMovimiento={borrarMovimiento}
+            crearCategoria={crearCategoria} setCrearCategoria={setCrearCategoria}
+            nuevaCategoria={nuevaCategoria} setNuevaCategoria={setNuevaCategoria}
+            crearCategoriaFin={crearCategoriaFin} borrarCategoriaFin={borrarCategoriaFin}
+          />}
 
         </div>
       </div>
@@ -865,6 +745,15 @@ export default function App() {
 }
 
 const inputStyle = { width: "100%", background: "rgba(0,0,0,0.4)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, fontSize: 12, padding: "6px 8px", outline: "none" };
+
+function FilaFiscal({ label, valor, color, prefijo = "", negrita = false }) {
+  return (
+    <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: 6, padding: "7px 9px" }}>
+      <div style={{ fontSize: 9, color: "#777", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontFamily: "monospace", fontSize: 13, color, fontWeight: negrita ? 700 : 500 }}>{prefijo}{Math.abs(valor).toLocaleString("es-ES")}€</div>
+    </div>
+  );
+}
 
 function Campo({ label, children }) { return <div style={{ marginBottom: 8 }}><div style={{ color: "#888", fontSize: 10, marginBottom: 3 }}>{label}</div>{children}</div>; }
 function CampoNum({ label, valor, onBlur, ancho = 45 }) { return <div style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ color: "#666", fontSize: 10 }}>{label}</span><input type="number" defaultValue={valor} onBlur={e => onBlur(Number(e.target.value) || 0)} style={{ ...inputStyle, width: ancho, padding: "3px 6px", fontSize: 11 }} /></div>; }
