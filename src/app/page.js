@@ -61,6 +61,7 @@ export default function App() {
   const [finanzasError, setFinanzasError] = useState("");
   const [finanzasData, setFinanzasData] = useState(null);
   const [categoriasFin, setCategoriasFin] = useState([]);
+  const [cuadresCaja, setCuadresCaja] = useState([]);
   const [crearMov, setCrearMov] = useState(false);
   const [nuevoMov, setNuevoMov] = useState({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco", iva_incluido: false, pct_iva_mov: 21, deducible: true, irpf_retenido: 0, tipo_ingreso: "con_iva_con_retencion", tipo_gasto: "iva_deducible", proyecto: "" });
   const [crearCategoria, setCrearCategoria] = useState(false);
@@ -190,9 +191,10 @@ export default function App() {
 
   const cargarFinanzas = async (pwd) => {
     const password = pwd || finanzasPwd;
-    const [fRes, cRes] = await Promise.all([
+    const [fRes, cRes, cuRes] = await Promise.all([
       fetch("/api/finanzas", { headers: finHeaders(password) }),
       fetch("/api/categorias-finanzas", { headers: finHeaders(password) }),
+      fetch("/api/cuadres-caja", { headers: finHeaders(password) }),
     ]);
     if (fRes.status === 401) {
       setFinanzasUnlocked(false);
@@ -202,8 +204,10 @@ export default function App() {
     }
     const fData = await fRes.json();
     const cData = await cRes.json();
+    const cuData = await cuRes.json();
     setFinanzasData(fData);
     setCategoriasFin(cData.categorias || []);
+    setCuadresCaja(cuData.cuadres || []);
     return true;
   };
 
@@ -241,6 +245,19 @@ export default function App() {
   const borrarMovimiento = async (id) => {
     if (!confirm("¿Borrar movimiento?")) return;
     await fetch(`/api/finanzas?id=${id}`, { method: "DELETE", headers: finHeaders() });
+    cargarFinanzas();
+  };
+
+  const crearCuadre = async (cuadre) => {
+    const res = await fetch("/api/cuadres-caja", { method: "POST", headers: finHeaders(), body: JSON.stringify(cuadre) });
+    const data = await res.json();
+    if (data.ok) cargarFinanzas();
+    else alert("Error: " + (data.error || "no se pudo guardar"));
+  };
+
+  const borrarCuadre = async (id) => {
+    if (!confirm("¿Borrar este cuadre?")) return;
+    await fetch(`/api/cuadres-caja?id=${id}`, { method: "DELETE", headers: finHeaders() });
     cargarFinanzas();
   };
 
@@ -731,6 +748,7 @@ export default function App() {
             finanzasUnlocked={finanzasUnlocked} finanzasPwdInput={finanzasPwdInput} setFinanzasPwdInput={setFinanzasPwdInput}
             finanzasError={finanzasError} setFinanzasError={setFinanzasError} unlockFinanzas={unlockFinanzas}
             finanzasData={finanzasData} categoriasFin={categoriasFin}
+            cuadresCaja={cuadresCaja} crearCuadre={crearCuadre} borrarCuadre={borrarCuadre}
             crearMov={crearMov} setCrearMov={setCrearMov} nuevoMov={nuevoMov} setNuevoMov={setNuevoMov}
             crearMovimiento={crearMovimiento} borrarMovimiento={borrarMovimiento}
             crearCategoria={crearCategoria} setCrearCategoria={setCrearCategoria}
