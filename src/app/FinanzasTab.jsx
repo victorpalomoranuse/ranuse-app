@@ -110,6 +110,7 @@ export default function FinanzasTab({
   crearMov, setCrearMov, nuevoMov, setNuevoMov, crearMovimiento, borrarMovimiento, recargarFinanzas,
   crearCategoria, setCrearCategoria, nuevaCategoria, setNuevaCategoria, crearCategoriaFin, borrarCategoriaFin,
 }) {
+  const [proyectoAbierto, setProyectoAbierto] = useState(null);
   const [editandoMov, setEditandoMov] = useState(null);
   const [editFiscal, setEditFiscal] = useState({});
   const [filtroAno, setFiltroAno] = useState("all");
@@ -162,13 +163,29 @@ export default function FinanzasTab({
     for (const m of movFiltrados) {
       if (!m.proyecto) continue;
       const p = m.proyecto.trim();
-      if (!map[p]) map[p] = { ingresos: 0, gastos: 0, fechaInicio: m.fecha };
-      if (m.tipo === "ingreso") map[p].ingresos += Number(m.importe) || 0;
-      else map[p].gastos += Number(m.importe) || 0;
+      if (!map[p]) map[p] = { ingresos: 0, gastos: 0, fechaInicio: m.fecha, baseIngresos: 0, ivaIngresos: 0, irpfRetenido: 0, baseGastos: 0, movimientos: [] };
+      const imp = Number(m.importe) || 0;
+      const pctIva = Number(m.pct_iva_mov) || 21;
+      const ivaIncluido = m.iva_incluido === true;
+      const irpfMov = Number(m.irpf_retenido) || 0;
+      const base = ivaIncluido ? imp / (1 + pctIva / 100) : imp;
+      const iva = ivaIncluido ? imp - base : 0;
+
+      map[p].movimientos.push(m);
       if (m.fecha < map[p].fechaInicio) map[p].fechaInicio = m.fecha;
+
+      if (m.tipo === "ingreso") {
+        map[p].ingresos += imp;
+        map[p].baseIngresos += base;
+        map[p].ivaIngresos += iva;
+        map[p].irpfRetenido += irpfMov;
+      } else {
+        map[p].gastos += imp - irpfMov;
+        map[p].baseGastos += base;
+      }
     }
     return Object.entries(map)
-      .map(([nombre, d]) => ({ nombre, ...d, margen: d.ingresos - d.gastos }))
+      .map(([nombre, d]) => ({ nombre, ...d, margen: d.baseIngresos - d.baseGastos }))
       .sort((a, b) => b.ingresos - a.ingresos);
   }, [movFiltrados]);
 
@@ -500,22 +517,71 @@ export default function FinanzasTab({
       {porProyecto.length > 0 && (
         <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "#beb0a2", fontWeight: 700, marginBottom: 10 }}>Proyectos · clientes</div>
-          {porProyecto.map(p => (
-            <div key={p.nombre} style={{ padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#e0e0e0" }}>{p.nombre}</span>
-                <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€</span>
+          {porProyecto.map(p => {
+            const abierto = proyectoAbierto === p.nombre;
+            const pctMargen = p.baseIngresos > 0 ? Math.round((p.margen / p.baseIngresos) * 100) : 0;
+            return (
+              <div key={p.nombre} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                {/* CABECERA — clic para expandir */}
+                <div onClick={() => setProyectoAbierto(abierto ? null : p.nombre)}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", cursor: "pointer" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#e0e0e0" }}>{p.nombre}</div>
+                    <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>desde {p.fechaInicio} · {p.movimientos.length} mov.</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€ neto</div>
+                    <div style={{ fontSize: 10, color: p.margen >= 0 ? "#4ade80" : "#f87171" }}>{pctMargen}% margen · {abierto ? "▲" : "▼"}</div>
+                  </div>
+                </div>
+
+                {/* DESGLOSE EXPANDIDO */}
+                {abierto && (
+                  <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                      {/* INGRESOS */}
+                      <div style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: 6, padding: 10 }}>
+                        <div style={{ fontSize: 9, color: "#4ade80", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Ingresos</div>
+                        <div style={{ fontSize: 10, color: "#888", display: "flex", justifyContent: "space-between" }}><span>Bruto</span><span style={{ fontFamily: "monospace", color: "#4ade80" }}>{fmt(p.ingresos)}€</span></div>
+                        {p.ivaIngresos > 0 && <div style={{ fontSize: 10, color: "#888", display: "flex", justifyContent: "space-between" }}><span>IVA repercutido</span><span style={{ fontFamily: "monospace", color: "#666" }}>{fmt(p.ivaIngresos)}€</span></div>}
+                        {p.irpfRetenido > 0 && <div style={{ fontSize: 10, color: "#888", display: "flex", justifyContent: "space-between" }}><span>IRPF retenido</span><span style={{ fontFamily: "monospace", color: "#888" }}>−{fmt(p.irpfRetenido)}€</span></div>}
+                        <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 6, paddingTop: 6, fontSize: 11, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
+                          <span style={{ color: "#aaa" }}>Base neta</span>
+                          <span style={{ fontFamily: "monospace", color: "#4ade80" }}>{fmt(p.baseIngresos)}€</span>
+                        </div>
+                      </div>
+                      {/* GASTOS */}
+                      <div style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 6, padding: 10 }}>
+                        <div style={{ fontSize: 9, color: "#f87171", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Gastos</div>
+                        <div style={{ fontSize: 10, color: "#888", display: "flex", justifyContent: "space-between" }}><span>Total pagado</span><span style={{ fontFamily: "monospace", color: "#f87171" }}>{fmt(p.gastos)}€</span></div>
+                        <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 6, paddingTop: 6, fontSize: 11, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
+                          <span style={{ color: "#aaa" }}>Base deducible</span>
+                          <span style={{ fontFamily: "monospace", color: "#f87171" }}>{fmt(p.baseGastos)}€</span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* RESULTADO */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(190,176,162,0.06)", borderRadius: 6, padding: "8px 12px" }}>
+                      <span style={{ fontSize: 11, color: "#888" }}>Margen neto (base ingresos − base gastos)</span>
+                      <span style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€</span>
+                    </div>
+                    {/* MOVIMIENTOS DEL PROYECTO */}
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Movimientos</div>
+                      {p.movimientos.sort((a,b) => b.fecha.localeCompare(a.fecha)).map(m => (
+                        <div key={m.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 11 }}>
+                          <span style={{ color: "#777" }}>{m.fecha} · {m.descripcion || m.categoria || "—"}</span>
+                          <span style={{ fontFamily: "monospace", color: m.tipo === "ingreso" ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                            {m.tipo === "ingreso" ? "+" : "−"}{fmt(Number(m.importe))}€
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", gap: 12, fontSize: 10 }}>
-                <span style={{ color: "#666" }}>desde {p.fechaInicio}</span>
-                <span style={{ color: "#4ade80" }}>+{fmt(p.ingresos)}€</span>
-                {p.gastos > 0 && <span style={{ color: "#f87171" }}>−{fmt(p.gastos)}€</span>}
-                <span style={{ color: p.margen >= 0 ? "#4ade80" : "#f87171" }}>
-                  {p.ingresos > 0 ? `${Math.round((p.margen / p.ingresos) * 100)}% margen` : ""}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
