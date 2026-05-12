@@ -138,33 +138,6 @@ export async function PATCH(req) {
   const result = await supabaseAdmin.from("prospectos").update(update).eq("id", body.id).select().single();
   if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
 
-  // Sync con módulo de finanzas: si pasa a "venta" o se edita su importe, crea/actualiza
-  // un movimiento de ingreso enlazado al prospecto.
-  if (result.data && result.data.estado === "venta" && result.data.importe_venta) {
-    const { data: existente } = await supabaseAdmin
-      .from("movimientos")
-      .select("id")
-      .eq("prospecto_id", result.data.id)
-      .eq("origen", "venta_crm")
-      .maybeSingle();
-    const payload = {
-      tipo: "ingreso",
-      fecha: result.data.fecha_venta || new Date().toISOString().slice(0, 10),
-      importe: Number(result.data.importe_venta),
-      categoria: "Venta diseño",
-      descripcion: `Venta CRM: ${result.data.nombre}`,
-      origen: "venta_crm",
-      prospecto_id: result.data.id,
-      cuenta: "banco",
-      updated_at: new Date().toISOString(),
-    };
-    if (existente) {
-      await supabaseAdmin.from("movimientos").update(payload).eq("id", existente.id);
-    } else {
-      await supabaseAdmin.from("movimientos").insert(payload);
-    }
-  }
-
   return Response.json({ ok: true, prospecto: result.data });
 }
 
