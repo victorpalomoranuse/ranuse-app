@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo } from "react";
+import DashboardFinanzas from "./DashboardFinanzas";
 
 const inputStyle = { width: "100%", background: "rgba(0,0,0,0.4)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, fontSize: 12, padding: "6px 8px", outline: "none" };
 
@@ -176,6 +177,7 @@ export default function FinanzasTab({
   crearCategoria, setCrearCategoria, nuevaCategoria, setNuevaCategoria, crearCategoriaFin, borrarCategoriaFin,
 }) {
   const [proyectoAbierto, setProyectoAbierto] = useState(null);
+  const [vista, setVista] = useState("movimientos"); // "movimientos" | "dashboard"
   const [editandoMov, setEditandoMov] = useState(null);
   const [editFiscal, setEditFiscal] = useState({});
   const [filtroAno, setFiltroAno] = useState("all");
@@ -269,6 +271,20 @@ export default function FinanzasTab({
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+
+      {/* NAVEGACIÓN */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[["movimientos","📋 Movimientos"],["dashboard","📊 Dashboard"]].map(([v, l]) => (
+          <button key={v} onClick={() => setVista(v)} style={{
+            flex: 1, padding: "8px 0", fontSize: 11, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
+            background: vista === v ? "linear-gradient(135deg, #beb0a2, #a89686)" : "rgba(255,255,255,0.05)",
+            color: vista === v ? "#000" : "#666",
+          }}>{l}</button>
+        ))}
+      </div>
+
+      {vista === "dashboard" && <DashboardFinanzas movimientos={finanzasData?.movimientos || []} />}
+      {vista === "movimientos" && <>
 
       {/* FILTROS */}
       <div style={{ marginBottom: 14 }}>
@@ -656,13 +672,23 @@ export default function FinanzasTab({
               </div>
               <button onClick={() => {
                 if (isEditing) { setEditandoMov(null); setEditFiscal({}); }
-                else { setEditandoMov(m.id); setEditFiscal({ tipo_ingreso: m.tipo_ingreso || "con_iva_con_retencion", tipo_gasto: m.tipo_gasto || "iva_deducible", modo_iva: getModoIva(m), pct_iva_mov: m.pct_iva_mov || 21, irpf_retenido: m.irpf_retenido || 0, proyecto: m.proyecto || "", categoria: m.categoria || "" }); }
+                else { setEditandoMov(m.id); setEditFiscal({ fecha: m.fecha, importe: m.importe, tipo_ingreso: m.tipo_ingreso || "con_iva_con_retencion", tipo_gasto: m.tipo_gasto || "iva_deducible", modo_iva: getModoIva(m), pct_iva_mov: m.pct_iva_mov || 21, irpf_retenido: m.irpf_retenido || 0, proyecto: m.proyecto || "", categoria: m.categoria || "" }); }
               }} style={{ background: "none", border: "none", color: isEditing ? "#beb0a2" : "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✎</button>
               <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
             </div>
             {isEditing && (
               <div style={{ padding: "0 12px 12px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                 <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: 1, margin: "8px 0" }}>Editar campos fiscales</div>
+                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 9, color: "#666", marginBottom: 3 }}>Fecha</div>
+                    <input type="date" value={editFiscal.fecha || m.fecha} onChange={e => setEditFiscal(f => ({ ...f, fecha: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 9, color: "#666", marginBottom: 3 }}>Importe (€)</div>
+                    <input type="number" value={editFiscal.importe !== undefined ? editFiscal.importe : m.importe} onChange={e => setEditFiscal(f => ({ ...f, importe: e.target.value }))} style={inputStyle} />
+                  </div>
+                </div>
                 {m.tipo === "ingreso" ? (
                   <select value={editFiscal.tipo_ingreso} onChange={e => setEditFiscal(f => ({ ...f, tipo_ingreso: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
                     {Object.entries(TIPO_INGRESO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -708,6 +734,8 @@ export default function FinanzasTab({
       {movFiltrados.length === 0 && (
         <div style={{ color: "#555", fontSize: 12, textAlign: "center", padding: "30px 0" }}>No hay movimientos en este período.</div>
       )}
+
+      </>}
     </div>
   );
 }
