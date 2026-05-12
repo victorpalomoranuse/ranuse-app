@@ -38,12 +38,7 @@ function calcularFiscal(movimientos) {
   for (const m of movimientos) {
     const imp = Number(m.importe) || 0;
     const pctIva = Number(m.pct_iva_mov) || 21;
-    const ivaIncluido = m.iva_incluido === true;
-    const tipoGasto = m.tipo_gasto || "sin_iva";
-    const tipoIngreso = m.tipo_ingreso || "sin_iva";
-    const irpfMov = Number(m.irpf_retenido) || 0;
-
-    if (m.cuenta === "caja") caja += m.tipo === "ingreso" ? imp : -imp;
+    const ivaIncluido = m.iva_incluido === true || m.iva_incluido === "true";
     else banco += m.tipo === "ingreso" ? imp : -imp;
 
     if (m.tipo === "ingreso") {
@@ -166,7 +161,7 @@ export default function FinanzasTab({
       if (!map[p]) map[p] = { ingresos: 0, gastos: 0, fechaInicio: m.fecha, baseIngresos: 0, ivaIngresos: 0, irpfRetenido: 0, baseGastos: 0, movimientos: [] };
       const imp = Number(m.importe) || 0;
       const pctIva = Number(m.pct_iva_mov) || 21;
-      const ivaIncluido = m.iva_incluido === true;
+      const ivaIncluido = m.iva_incluido === true || m.iva_incluido === "true";
       const irpfMov = Number(m.irpf_retenido) || 0;
       const base = ivaIncluido ? imp / (1 + pctIva / 100) : imp;
       const iva = ivaIncluido ? imp - base : 0;
@@ -624,7 +619,7 @@ export default function FinanzasTab({
                   {m.fecha} · {m.categoria || "—"} · {m.cuenta || "banco"}
                   {m.proyecto ? <span style={{ color: "#beb0a2" }}> · {m.proyecto}</span> : null}
                   {tipoLabel ? <span style={{ color: "#555" }}> · {tipoLabel}</span> : null}
-                  {m.iva_incluido && Number(m.importe) > 0 && (() => {
+                  {(m.iva_incluido === true || m.iva_incluido === "true") && Number(m.importe) > 0 && (() => {
                     const pct = Number(m.pct_iva_mov) || 21;
                     const base = Number(m.importe) / (1 + pct / 100);
                     const iva = Number(m.importe) - base;
