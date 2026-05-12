@@ -23,12 +23,37 @@ const TIPO_INGRESO = {
   sin_iva:               { label: "Sin IVA" },
 };
 
+const PCT_IVA_OPCIONES = [21, 10, 4];
+
 function fmt(n) {
   return Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-function ivaInc(m) {
-  return m.iva_incluido === true || m.iva_incluido === "true";
+function fmt2(n) {
+  return Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Calcula base e IVA según modo_iva
+function calcIVA(importe, modoIva, pctIva) {
+  const imp = Number(importe) || 0;
+  const pct = Number(pctIva) || 21;
+  if (modoIva === "incluido") {
+    const base = imp / (1 + pct / 100);
+    return { base, iva: imp - base, total: imp };
+  } else if (modoIva === "base") {
+    return { base: imp, iva: imp * (pct / 100), total: imp * (1 + pct / 100) };
+  } else {
+    // sin_iva
+    return { base: imp, iva: 0, total: imp };
+  }
+}
+
+function getModoIva(m) {
+  // compatibilidad con registros viejos
+  if (m.modo_iva) return m.modo_iva;
+  if (m.iva_incluido === true || m.iva_incluido === "true") return "incluido";
+  if (m.tipo_ingreso === "sin_iva" || m.tipo_gasto === "sin_iva") return "sin_iva";
+  return "base";
 }
 
 function calcularFiscal(movimientos) {
@@ -41,11 +66,12 @@ function calcularFiscal(movimientos) {
 
   for (const m of movimientos) {
     const imp = Number(m.importe) || 0;
-    const pctIva = Number(m.pct_iva_mov) || 21;
-    const incluido = ivaInc(m);
+    const pct = Number(m.pct_iva_mov) || 21;
+    const modo = getModoIva(m);
     const tipoGasto = m.tipo_gasto || "sin_iva";
     const tipoIngreso = m.tipo_ingreso || "sin_iva";
     const irpfMov = Number(m.irpf_retenido) || 0;
+    const { base, iva } = calcIVA(imp, modo, pct);
 
     if (m.cuenta === "caja") caja += m.tipo === "ingreso" ? imp : -imp;
     else banco += m.tipo === "ingreso" ? imp : -imp;
@@ -53,9 +79,7 @@ function calcularFiscal(movimientos) {
     if (m.tipo === "ingreso") {
       ingresos += imp;
       irpfRetenido += irpfMov;
-      if (tipoIngreso !== "sin_iva") {
-        const base = incluido ? imp / (1 + pctIva / 100) : imp;
-        const iva  = incluido ? imp - base : base * (pctIva / 100);
+      if (tipoIngreso !== "sin_iva" && modo !== "sin_iva") {
         ivaRepercutido += iva;
         baseIngresos += base;
       } else {
@@ -67,13 +91,10 @@ function calcularFiscal(movimientos) {
         gastos += imp;
       } else {
         gastos += imp - irpfMov;
-        if (tipoGasto === "iva_deducible") {
-          const base = incluido ? imp / (1 + pctIva / 100) : imp;
-          const iva  = incluido ? imp - base : base * (pctIva / 100);
+        if (tipoGasto === "iva_deducible" && modo !== "sin_iva") {
           ivaSoportadoDeducible += iva;
           baseGastosDeducibles += base;
-        } else if (tipoGasto === "iva_no_deducible") {
-          const base = incluido ? imp / (1 + pctIva / 100) : imp;
+        } else if (tipoGasto === "iva_no_deducible" && modo !== "sin_iva") {
           baseGastosDeducibles += base;
         } else {
           baseGastosDeducibles += imp;
@@ -94,6 +115,57 @@ function calcularFiscal(movimientos) {
     irpf_retenido: irpfRetenido, provision_irpf: provisionIrpf, irpf_pendiente: irpfPendiente,
     impuestos_reales_pagados: impuestosRealesPagados, beneficio_neto: beneficioNeto, tuyo,
   };
+}
+
+function IvaSelector({ modoIva, pctIva, importe, onChangeModo, onChangePct }) {
+  const pctNum = Number(pctIva) || 21;
+  const imp = Number(importe) || 0;
+  const esPersonalizado = !PCT_IVA_OPCIONES.includes(pctNum);
+
+  return (
+    <div style={{ marginBottom: 6 }}>
+      {/* Modo IVA */}
+      <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", marginBottom: 6 }}>
+        {[["sin_iva","Sin IVA"],["base","Base imp."],["incluido","IVA incl."]].map(([val, label]) => (
+          <button key={val} onClick={() => onChangeModo(val)}
+            style={{ flex: 1, padding: "6px 4px", fontSize: 10, fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.15s",
+              background: modoIva === val ? "#beb0a2" : "rgba(0,0,0,0.3)", color: modoIva === val ? "#000" : "#666" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* % IVA — solo si aplica */}
+      {modoIva !== "sin_iva" && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: imp ? 4 : 0 }}>
+          <span style={{ fontSize: 10, color: "#888", whiteSpace: "nowrap" }}>% IVA</span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {PCT_IVA_OPCIONES.map(p => (
+              <button key={p} onClick={() => onChangePct(p)}
+                style={{ padding: "4px 8px", fontSize: 10, fontWeight: 600, border: `1px solid ${pctNum === p ? "#beb0a2" : "rgba(255,255,255,0.1)"}`, borderRadius: 4, cursor: "pointer",
+                  background: pctNum === p ? "rgba(190,176,162,0.2)" : "rgba(0,0,0,0.3)", color: pctNum === p ? "#beb0a2" : "#666" }}>
+                {p}%
+              </button>
+            ))}
+            <input type="number" placeholder="otro" value={esPersonalizado ? pctNum : ""} onChange={e => onChangePct(parseFloat(e.target.value) || 21)}
+              style={{ ...inputStyle, width: 55, fontSize: 10, padding: "4px 6px" }} />
+          </div>
+        </div>
+      )}
+
+      {/* Desglose en tiempo real */}
+      {modoIva !== "sin_iva" && imp > 0 && (() => {
+        const { base, iva, total } = calcIVA(imp, modoIva, pctNum);
+        return (
+          <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 4, padding: "5px 8px", fontSize: 10, display: "flex", gap: 12 }}>
+            <span style={{ color: "#888" }}>Base: <span style={{ color: "#beb0a2", fontFamily: "monospace" }}>{fmt2(base)}€</span></span>
+            <span style={{ color: "#888" }}>IVA ({pctNum}%): <span style={{ color: "#666", fontFamily: "monospace" }}>{fmt2(iva)}€</span></span>
+            <span style={{ color: "#888" }}>Total: <span style={{ color: "#aaa", fontFamily: "monospace" }}>{fmt2(total)}€</span></span>
+          </div>
+        );
+      })()}
+    </div>
+  );
 }
 
 export default function FinanzasTab({
@@ -152,25 +224,25 @@ export default function FinanzasTab({
     for (const m of movFiltrados) {
       if (!m.proyecto) continue;
       const p = m.proyecto.trim();
-      if (!map[p]) map[p] = { ingresos: 0, gastos: 0, fechaInicio: m.fecha, baseIngresos: 0, ivaIngresos: 0, irpfRetenido: 0, baseGastos: 0, movimientos: [] };
-      const imp     = Number(m.importe) || 0;
-      const pctIva  = Number(m.pct_iva_mov) || 21;
-      const incluido = ivaInc(m);
+      if (!map[p]) map[p] = { ingresos: 0, gastos: 0, fechaInicio: m.fecha, baseIngresos: 0, ivaIngresos: 0, irpfRetenido: 0, baseGastos: 0, ivaGastos: 0, movimientos: [] };
+      const imp = Number(m.importe) || 0;
+      const pct = Number(m.pct_iva_mov) || 21;
+      const modo = getModoIva(m);
       const irpfMov = Number(m.irpf_retenido) || 0;
-      const base    = incluido ? imp / (1 + pctIva / 100) : imp;
-      const iva     = incluido ? imp - base : 0;
+      const { base, iva } = calcIVA(imp, modo, pct);
 
       map[p].movimientos.push(m);
       if (m.fecha < map[p].fechaInicio) map[p].fechaInicio = m.fecha;
 
       if (m.tipo === "ingreso") {
-        map[p].ingresos     += imp;
+        map[p].ingresos += imp;
         map[p].baseIngresos += base;
-        map[p].ivaIngresos  += iva;
+        map[p].ivaIngresos += iva;
         map[p].irpfRetenido += irpfMov;
       } else {
-        map[p].gastos     += imp - irpfMov;
+        map[p].gastos += imp - irpfMov;
         map[p].baseGastos += base;
+        map[p].ivaGastos += iva;
       }
     }
     return Object.entries(map)
@@ -260,9 +332,9 @@ export default function FinanzasTab({
           </div>
           {fiscal.impuestos_reales_pagados > 0 && (
             <div style={{ marginTop: 6, fontSize: 10, color: "#666" }}>
-              Previsión vs real: {fiscal.impuestos_reales_pagados > (fiscal.iva_neto + fiscal.provision_irpf)
-                ? <span style={{ color: "#f87171" }}>has pagado {fmt(fiscal.impuestos_reales_pagados - fiscal.iva_neto - fiscal.provision_irpf)}€ más de lo previsto</span>
-                : <span style={{ color: "#4ade80" }}>quedan {fmt((fiscal.iva_neto + fiscal.provision_irpf) - fiscal.impuestos_reales_pagados)}€ por pagar según previsión</span>
+              {fiscal.impuestos_reales_pagados > (fiscal.iva_neto + fiscal.provision_irpf)
+                ? <span style={{ color: "#f87171" }}>Has pagado {fmt(fiscal.impuestos_reales_pagados - fiscal.iva_neto - fiscal.provision_irpf)}€ más de lo previsto</span>
+                : <span style={{ color: "#4ade80" }}>Quedan {fmt((fiscal.iva_neto + fiscal.provision_irpf) - fiscal.impuestos_reales_pagados)}€ por pagar según previsión</span>
               }
             </div>
           )}
@@ -379,6 +451,7 @@ export default function FinanzasTab({
               </button>
             ))}
           </div>
+
           {nuevoMov.tipo === "ingreso" && (
             <select value={nuevoMov.tipo_ingreso || "con_iva_con_retencion"} onChange={e => setNuevoMov(m => ({ ...m, tipo_ingreso: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
               {Object.entries(TIPO_INGRESO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -389,49 +462,31 @@ export default function FinanzasTab({
               {Object.entries(TIPO_GASTO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           )}
+
           <input type="date" value={nuevoMov.fecha} onChange={e => setNuevoMov(m => ({ ...m, fecha: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
           <input type="number" placeholder="Importe (€)" value={nuevoMov.importe} onChange={e => setNuevoMov(m => ({ ...m, importe: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
-          {nuevoMov.tipo === "ingreso" && nuevoMov.tipo_ingreso !== "sin_iva" && (
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <label style={{ fontSize: 11, color: "#aaa" }}>IVA incluido en el importe</label>
-                <input type="checkbox" checked={nuevoMov.iva_incluido || false} onChange={e => setNuevoMov(m => ({ ...m, iva_incluido: e.target.checked }))} style={{ accentColor: "#beb0a2", width: 14, height: 14 }} />
-              </div>
-              {nuevoMov.iva_incluido && nuevoMov.importe && (
-                <div style={{ fontSize: 10, color: "#666", background: "rgba(0,0,0,0.2)", borderRadius: 4, padding: "4px 8px" }}>
-                  Base: {(Number(nuevoMov.importe) / 1.21).toFixed(2)}€ · IVA: {(Number(nuevoMov.importe) - Number(nuevoMov.importe) / 1.21).toFixed(2)}€
-                </div>
-              )}
-            </div>
-          )}
-          {nuevoMov.tipo === "gasto" && ["iva_deducible","iva_no_deducible"].includes(nuevoMov.tipo_gasto) && (
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <label style={{ fontSize: 11, color: "#aaa" }}>IVA incluido en el importe</label>
-                <input type="checkbox" checked={nuevoMov.iva_incluido || false} onChange={e => setNuevoMov(m => ({ ...m, iva_incluido: e.target.checked }))} style={{ accentColor: "#beb0a2", width: 14, height: 14 }} />
-              </div>
-              {nuevoMov.iva_incluido && nuevoMov.importe && (
-                <div style={{ fontSize: 10, color: "#666", background: "rgba(0,0,0,0.2)", borderRadius: 4, padding: "4px 8px" }}>
-                  Base: {(Number(nuevoMov.importe) / 1.21).toFixed(2)}€ · IVA: {(Number(nuevoMov.importe) - Number(nuevoMov.importe) / 1.21).toFixed(2)}€
-                </div>
-              )}
-            </div>
-          )}
+
+          <IvaSelector
+            modoIva={nuevoMov.modo_iva || "base"}
+            pctIva={nuevoMov.pct_iva_mov || 21}
+            importe={nuevoMov.importe}
+            onChangeModo={v => setNuevoMov(m => ({ ...m, modo_iva: v }))}
+            onChangePct={v => setNuevoMov(m => ({ ...m, pct_iva_mov: v }))}
+          />
+
           {nuevoMov.tipo === "ingreso" && nuevoMov.tipo_ingreso === "con_iva_con_retencion" && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
               <input type="number" placeholder="0" value={nuevoMov.irpf_retenido || ""} onChange={e => setNuevoMov(m => ({ ...m, irpf_retenido: parseFloat(e.target.value) || 0 }))} style={inputStyle} />
             </div>
           )}
-          {nuevoMov.tipo === "gasto" && ["iva_deducible","iva_no_deducible","sin_iva"].includes(nuevoMov.tipo_gasto) && (
+          {nuevoMov.tipo === "gasto" && nuevoMov.tipo_gasto !== "impuesto_real" && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
               <input type="number" placeholder="0 (si te retienen)" value={nuevoMov.irpf_retenido || ""} onChange={e => setNuevoMov(m => ({ ...m, irpf_retenido: parseFloat(e.target.value) || 0 }))} style={inputStyle} />
-              {nuevoMov.irpf_retenido > 0 && nuevoMov.importe && (
-                <span style={{ fontSize: 10, color: "#666", whiteSpace: "nowrap" }}>Pagas: {(Number(nuevoMov.importe) - nuevoMov.irpf_retenido).toFixed(2)}€</span>
-              )}
             </div>
           )}
+
           <select value={nuevoMov.categoria || ""} onChange={e => setNuevoMov(m => ({ ...m, categoria: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
             <option value="">Categoría...</option>
             {categoriasFin.filter(c => c.tipo === nuevoMov.tipo).map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
@@ -508,6 +563,7 @@ export default function FinanzasTab({
                       <div style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 6, padding: 10 }}>
                         <div style={{ fontSize: 9, color: "#f87171", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Gastos</div>
                         <div style={{ fontSize: 10, color: "#888", display: "flex", justifyContent: "space-between" }}><span>Total pagado</span><span style={{ fontFamily: "monospace", color: "#f87171" }}>{fmt(p.gastos)}€</span></div>
+                        {p.ivaGastos > 0 && <div style={{ fontSize: 10, color: "#888", display: "flex", justifyContent: "space-between" }}><span>IVA soportado</span><span style={{ fontFamily: "monospace", color: "#666" }}>−{fmt(p.ivaGastos)}€</span></div>}
                         <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 6, paddingTop: 6, fontSize: 11, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
                           <span style={{ color: "#aaa" }}>Base deducible</span>
                           <span style={{ fontFamily: "monospace", color: "#f87171" }}>{fmt(p.baseGastos)}€</span>
@@ -515,16 +571,15 @@ export default function FinanzasTab({
                       </div>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(190,176,162,0.06)", borderRadius: 6, padding: "8px 12px", marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: "#888" }}>Margen neto</span>
+                      <span style={{ fontSize: 11, color: "#888" }}>Margen neto (base ingresos − base gastos)</span>
                       <span style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€</span>
                     </div>
                     <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Movimientos</div>
                     {p.movimientos.sort((a, b) => b.fecha.localeCompare(a.fecha)).map(m => {
                       const imp = Number(m.importe) || 0;
                       const pct = Number(m.pct_iva_mov) || 21;
-                      const inc = ivaInc(m);
-                      const base = inc ? imp / (1 + pct / 100) : imp;
-                      const iva  = inc ? imp - base : 0;
+                      const modo = getModoIva(m);
+                      const { base, iva } = calcIVA(imp, modo, pct);
                       return (
                         <div key={m.id} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
@@ -533,10 +588,11 @@ export default function FinanzasTab({
                               {m.tipo === "ingreso" ? "+" : "−"}{fmt(imp)}€
                             </span>
                           </div>
-                          {inc && (
-                            <div style={{ display: "flex", gap: 12, fontSize: 10, marginTop: 2, color: "#555" }}>
-                              <span>Base: <span style={{ color: "#888" }}>{fmt(base)}€</span></span>
-                              <span>IVA ({pct}%): <span style={{ color: "#666" }}>{fmt(iva)}€</span></span>
+                          {modo !== "sin_iva" && (
+                            <div style={{ display: "flex", gap: 12, fontSize: 10, marginTop: 2 }}>
+                              <span style={{ color: "#555" }}>Base: <span style={{ color: "#888", fontFamily: "monospace" }}>{fmt2(base)}€</span></span>
+                              <span style={{ color: "#555" }}>IVA ({pct}%): <span style={{ color: "#666", fontFamily: "monospace" }}>{fmt2(iva)}€</span></span>
+                              {modo === "base" && <span style={{ color: "#444", fontFamily: "monospace" }}>Total c/IVA: {fmt2(base + iva)}€</span>}
                             </div>
                           )}
                         </div>
@@ -564,6 +620,9 @@ export default function FinanzasTab({
         const tipoLabel = m.tipo === "ingreso" ? TIPO_INGRESO[m.tipo_ingreso]?.label || "" : TIPO_GASTO[m.tipo_gasto]?.label || "";
         const tipoColor = m.tipo === "ingreso" ? "#4ade80" : (TIPO_GASTO[m.tipo_gasto]?.color || "#f87171");
         const isEditing = editandoMov === m.id;
+        const modo = getModoIva(m);
+        const { base, iva } = calcIVA(Number(m.importe) || 0, modo, Number(m.pct_iva_mov) || 21);
+
         const guardarFiscal = async () => {
           await fetch("/api/finanzas", {
             method: "PATCH",
@@ -574,6 +633,7 @@ export default function FinanzasTab({
           setEditFiscal({});
           if (recargarFinanzas) recargarFinanzas();
         };
+
         return (
           <div key={m.id} style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${isEditing ? "rgba(190,176,162,0.3)" : "rgba(255,255,255,0.06)"}`, borderRadius: 8, marginBottom: 5 }}>
             <div style={{ padding: "9px 12px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -584,12 +644,7 @@ export default function FinanzasTab({
                   {m.fecha} · {m.categoria || "—"} · {m.cuenta || "banco"}
                   {m.proyecto ? <span style={{ color: "#beb0a2" }}> · {m.proyecto}</span> : null}
                   {tipoLabel ? <span style={{ color: "#555" }}> · {tipoLabel}</span> : null}
-                  {ivaInc(m) && Number(m.importe) > 0 && (() => {
-                    const pct = Number(m.pct_iva_mov) || 21;
-                    const base = Number(m.importe) / (1 + pct / 100);
-                    const iva = Number(m.importe) - base;
-                    return <span style={{ color: "#666" }}> · Base {fmt(base)}€ · IVA {fmt(iva)}€</span>;
-                  })()}
+                  {modo !== "sin_iva" ? <span style={{ color: "#555" }}> · Base {fmt2(base)}€ · IVA {fmt2(iva)}€</span> : null}
                   {Number(m.irpf_retenido) > 0 ? <span style={{ color: "#888" }}> · ret. {fmt(m.irpf_retenido)}€</span> : null}
                 </div>
               </div>
@@ -598,7 +653,7 @@ export default function FinanzasTab({
               </div>
               <button onClick={() => {
                 if (isEditing) { setEditandoMov(null); setEditFiscal({}); }
-                else { setEditandoMov(m.id); setEditFiscal({ tipo_ingreso: m.tipo_ingreso || "con_iva_con_retencion", tipo_gasto: m.tipo_gasto || "iva_deducible", iva_incluido: ivaInc(m), irpf_retenido: m.irpf_retenido || 0, proyecto: m.proyecto || "", categoria: m.categoria || "" }); }
+                else { setEditandoMov(m.id); setEditFiscal({ tipo_ingreso: m.tipo_ingreso || "con_iva_con_retencion", tipo_gasto: m.tipo_gasto || "iva_deducible", modo_iva: getModoIva(m), pct_iva_mov: m.pct_iva_mov || 21, irpf_retenido: m.irpf_retenido || 0, proyecto: m.proyecto || "", categoria: m.categoria || "" }); }
               }} style={{ background: "none", border: "none", color: isEditing ? "#beb0a2" : "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✎</button>
               <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
             </div>
@@ -614,12 +669,13 @@ export default function FinanzasTab({
                     {Object.entries(TIPO_GASTO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                 )}
-                {m.tipo === "ingreso" && editFiscal.tipo_ingreso !== "sin_iva" && (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                    <label style={{ fontSize: 11, color: "#aaa" }}>IVA incluido en el importe</label>
-                    <input type="checkbox" checked={editFiscal.iva_incluido || false} onChange={e => setEditFiscal(f => ({ ...f, iva_incluido: e.target.checked }))} style={{ accentColor: "#beb0a2", width: 14, height: 14 }} />
-                  </div>
-                )}
+                <IvaSelector
+                  modoIva={editFiscal.modo_iva || "base"}
+                  pctIva={editFiscal.pct_iva_mov || 21}
+                  importe={m.importe}
+                  onChangeModo={v => setEditFiscal(f => ({ ...f, modo_iva: v }))}
+                  onChangePct={v => setEditFiscal(f => ({ ...f, pct_iva_mov: v }))}
+                />
                 {m.tipo === "ingreso" && editFiscal.tipo_ingreso === "con_iva_con_retencion" && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
