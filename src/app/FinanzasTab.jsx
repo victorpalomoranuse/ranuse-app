@@ -63,18 +63,18 @@ function calcularFiscal(movimientos) {
         impuestosRealesPagados += imp;
         gastos += imp;
       } else {
-        gastos += imp;
+        // El importe del gasto es la base — lo que pagas en realidad es imp - irpfMov
+        gastos += imp - irpfMov; // lo que realmente sale de tu bolsillo
         if (tipoGasto === "iva_deducible") {
           const base = ivaIncluido ? imp / (1 + pctIva / 100) : imp;
           const iva = ivaIncluido ? imp - base : base * (pctIva / 100);
           ivaSoportadoDeducible += iva;
           baseGastosDeducibles += base;
         } else if (tipoGasto === "iva_no_deducible") {
-          // IVA pagado pero no deducible — va al gasto total pero no al cálculo de IVA
           const base = ivaIncluido ? imp / (1 + pctIva / 100) : imp;
           baseGastosDeducibles += base;
         } else {
-          // sin_iva: cuota autónomo, seguros, etc.
+          // sin_iva
           baseGastosDeducibles += imp;
         }
       }
@@ -432,11 +432,23 @@ export default function FinanzasTab({
             </div>
           )}
 
-          {/* IRPF retenido — solo ingresos con retención */}
+          {/* IRPF retenido — ingresos con retención */}
           {nuevoMov.tipo === "ingreso" && nuevoMov.tipo_ingreso === "con_iva_con_retencion" && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
               <input type="number" placeholder="0" value={nuevoMov.irpf_retenido || ""} onChange={e => setNuevoMov(m => ({ ...m, irpf_retenido: parseFloat(e.target.value) || 0 }))} style={inputStyle} />
+            </div>
+          )}
+          {/* IRPF retenido — gastos con retención (pagas menos de la base) */}
+          {nuevoMov.tipo === "gasto" && ["iva_deducible","iva_no_deducible","sin_iva"].includes(nuevoMov.tipo_gasto) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
+              <input type="number" placeholder="0 (si te retienen)" value={nuevoMov.irpf_retenido || ""} onChange={e => setNuevoMov(m => ({ ...m, irpf_retenido: parseFloat(e.target.value) || 0 }))} style={inputStyle} />
+              {nuevoMov.irpf_retenido > 0 && nuevoMov.importe && (
+                <span style={{ fontSize: 10, color: "#666", whiteSpace: "nowrap" }}>
+                  Pagas: {(Number(nuevoMov.importe) - nuevoMov.irpf_retenido).toFixed(2)}€
+                </span>
+              )}
             </div>
           )}
 
@@ -582,6 +594,12 @@ export default function FinanzasTab({
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
                     <input type="number" value={editFiscal.irpf_retenido} onChange={e => setEditFiscal(f => ({ ...f, irpf_retenido: parseFloat(e.target.value) || 0 }))} style={inputStyle} />
+                  </div>
+                )}
+                {m.tipo === "gasto" && ["iva_deducible","iva_no_deducible","sin_iva"].includes(editFiscal.tipo_gasto) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
+                    <input type="number" placeholder="0 (si te retienen)" value={editFiscal.irpf_retenido || ""} onChange={e => setEditFiscal(f => ({ ...f, irpf_retenido: parseFloat(e.target.value) || 0 }))} style={inputStyle} />
                   </div>
                 )}
                 <input placeholder="Proyecto / cliente" value={editFiscal.proyecto} onChange={e => setEditFiscal(f => ({ ...f, proyecto: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
