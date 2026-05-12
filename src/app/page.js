@@ -63,7 +63,7 @@ export default function App() {
   const [categoriasFin, setCategoriasFin] = useState([]);
   const [cuadresCaja, setCuadresCaja] = useState([]);
   const [crearMov, setCrearMov] = useState(false);
-  const [nuevoMov, setNuevoMov] = useState({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco", iva_incluido: false, pct_iva_mov: 21, deducible: true, irpf_retenido: 0, tipo_ingreso: "con_iva_con_retencion", tipo_gasto: "iva_deducible", proyecto: "" });
+  const [nuevoMov, setNuevoMov] = useState({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco", iva_incluido: false, pct_iva_mov: 21, deducible: true, irpf_retenido: 0, tipo_ingreso: "con_iva_con_retencion", tipo_gasto: "iva_deducible", proyecto: "", modo_iva: "base" });
   const [crearCategoria, setCrearCategoria] = useState(false);
   const [nuevaCategoria, setNuevaCategoria] = useState({ nombre: "", tipo: "gasto", color: "#beb0a2" });
   const [filtroFinTipo, setFiltroFinTipo] = useState("all");
@@ -236,7 +236,7 @@ export default function App() {
     const res = await fetch("/api/finanzas", { method: "POST", headers: finHeaders(), body: JSON.stringify(nuevoMov) });
     const data = await res.json();
     if (data.ok) {
-      setNuevoMov({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco", iva_incluido: false, pct_iva_mov: 21, deducible: true, irpf_retenido: 0, tipo_ingreso: "con_iva_con_retencion", tipo_gasto: "iva_deducible", proyecto: "" });
+      setNuevoMov({ tipo: "gasto", fecha: new Date().toISOString().slice(0, 10), importe: "", categoria: "", descripcion: "", cuenta: "banco", iva_incluido: false, pct_iva_mov: 21, deducible: true, irpf_retenido: 0, tipo_ingreso: "con_iva_con_retencion", tipo_gasto: "iva_deducible", proyecto: "", modo_iva: "base" });
       setCrearMov(false);
       cargarFinanzas();
     } else alert("Error: " + (data.error || "no se pudo guardar"));
