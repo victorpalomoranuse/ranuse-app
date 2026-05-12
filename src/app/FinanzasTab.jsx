@@ -519,14 +519,29 @@ export default function FinanzasTab({
                       <span style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€</span>
                     </div>
                     <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Movimientos</div>
-                    {p.movimientos.sort((a, b) => b.fecha.localeCompare(a.fecha)).map(m => (
-                      <div key={m.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: 11 }}>
-                        <span style={{ color: "#777" }}>{m.fecha} · {m.descripcion || m.categoria || "—"}</span>
-                        <span style={{ fontFamily: "monospace", color: m.tipo === "ingreso" ? "#4ade80" : "#f87171", fontWeight: 600 }}>
-                          {m.tipo === "ingreso" ? "+" : "−"}{fmt(Number(m.importe))}€
-                        </span>
-                      </div>
-                    ))}
+                    {p.movimientos.sort((a, b) => b.fecha.localeCompare(a.fecha)).map(m => {
+                      const imp = Number(m.importe) || 0;
+                      const pct = Number(m.pct_iva_mov) || 21;
+                      const inc = ivaInc(m);
+                      const base = inc ? imp / (1 + pct / 100) : imp;
+                      const iva  = inc ? imp - base : 0;
+                      return (
+                        <div key={m.id} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                            <span style={{ color: "#777" }}>{m.fecha} · {m.descripcion || m.categoria || "—"}</span>
+                            <span style={{ fontFamily: "monospace", color: m.tipo === "ingreso" ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                              {m.tipo === "ingreso" ? "+" : "−"}{fmt(imp)}€
+                            </span>
+                          </div>
+                          {inc && (
+                            <div style={{ display: "flex", gap: 12, fontSize: 10, marginTop: 2, color: "#555" }}>
+                              <span>Base: <span style={{ color: "#888" }}>{fmt(base)}€</span></span>
+                              <span>IVA ({pct}%): <span style={{ color: "#666" }}>{fmt(iva)}€</span></span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
