@@ -246,7 +246,7 @@ export default function FinanzasTab({
       }
     }
     return Object.entries(map)
-      .map(([nombre, d]) => ({ nombre, ...d, margen: d.baseIngresos - d.baseGastos }))
+      .map(([nombre, d]) => ({ nombre, ...d, margen: (d.baseIngresos - d.irpfRetenido) - d.baseGastos }))
       .sort((a, b) => b.ingresos - a.ingresos);
   }, [movFiltrados]);
 
@@ -557,7 +557,7 @@ export default function FinanzasTab({
                         {p.irpfRetenido > 0 && <div style={{ fontSize: 10, color: "#888", display: "flex", justifyContent: "space-between" }}><span>IRPF retenido</span><span style={{ fontFamily: "monospace", color: "#888" }}>−{fmt(p.irpfRetenido)}€</span></div>}
                         <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: 6, paddingTop: 6, fontSize: 11, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
                           <span style={{ color: "#aaa" }}>Base neta</span>
-                          <span style={{ fontFamily: "monospace", color: "#4ade80" }}>{fmt(p.baseIngresos)}€</span>
+                          <span style={{ fontFamily: "monospace", color: "#4ade80" }}>{fmt(p.baseIngresos - p.irpfRetenido)}€</span>
                         </div>
                       </div>
                       <div style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 6, padding: 10 }}>
