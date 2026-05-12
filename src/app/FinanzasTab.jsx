@@ -105,11 +105,13 @@ function calcularFiscal(movimientos) {
 
 export default function FinanzasTab({
   finanzasUnlocked, finanzasPwdInput, setFinanzasPwdInput, finanzasError, setFinanzasError, unlockFinanzas,
-  finanzasData, categoriasFin,
+  finanzasData, categoriasFin, finanzasPwd = "",
   cuadresCaja = [], crearCuadre, borrarCuadre,
-  crearMov, setCrearMov, nuevoMov, setNuevoMov, crearMovimiento, borrarMovimiento,
+  crearMov, setCrearMov, nuevoMov, setNuevoMov, crearMovimiento, borrarMovimiento, recargarFinanzas,
   crearCategoria, setCrearCategoria, nuevaCategoria, setNuevaCategoria, crearCategoriaFin, borrarCategoriaFin,
 }) {
+  const [editandoMov, setEditandoMov] = useState(null);
+  const [editFiscal, setEditFiscal] = useState({});
   const [filtroAno, setFiltroAno] = useState("all");
   const [filtroQ, setFiltroQ] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("all");
@@ -521,24 +523,78 @@ export default function FinanzasTab({
           ? TIPO_INGRESO[m.tipo_ingreso]?.label || ""
           : TIPO_GASTO[m.tipo_gasto]?.label || "";
         const tipoColor = m.tipo === "ingreso" ? "#4ade80" : (TIPO_GASTO[m.tipo_gasto]?.color || "#f87171");
+        const isEditing = editandoMov === m.id;
+
+        const guardarFiscal = async () => {
+          await fetch("/api/finanzas", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "x-finanzas-password": finanzasPwd },
+            body: JSON.stringify({ id: m.id, ...editFiscal }),
+          });
+          setEditandoMov(null);
+          setEditFiscal({});
+          if (recargarFinanzas) recargarFinanzas();
+        };
+
         return (
-          <div key={m.id} style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "9px 12px", marginBottom: 5, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: tipoColor, flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.descripcion || m.categoria || "(sin descripción)"}</div>
-              <div style={{ color: "#555", fontSize: 10, marginTop: 1 }}>
-                {m.fecha} · {m.categoria || "—"} · {m.cuenta || "banco"}
-                {m.proyecto ? <span style={{ color: "#beb0a2" }}> · {m.proyecto}</span> : null}
-                {tipoLabel ? <span style={{ color: "#444" }}> · {tipoLabel}</span> : null}
-                {m.irpf_retenido > 0 ? <span style={{ color: "#888" }}> · ret. {fmt(m.irpf_retenido)}€</span> : null}
-                {m.origen === "venta_crm" ? <span style={{ color: "#555" }}> · CRM</span> : null}
+          <div key={m.id} style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${isEditing ? "rgba(190,176,162,0.3)" : "rgba(255,255,255,0.06)"}`, borderRadius: 8, marginBottom: 5 }}>
+            <div style={{ padding: "9px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 5, height: 5, borderRadius: "50%", background: tipoColor, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.descripcion || m.categoria || "(sin descripción)"}</div>
+                <div style={{ color: "#555", fontSize: 10, marginTop: 1 }}>
+                  {m.fecha} · {m.categoria || "—"} · {m.cuenta || "banco"}
+                  {m.proyecto ? <span style={{ color: "#beb0a2" }}> · {m.proyecto}</span> : null}
+                  {tipoLabel ? <span style={{ color: "#555" }}> · {tipoLabel}</span> : null}
+                  {m.irpf_retenido > 0 ? <span style={{ color: "#888" }}> · ret. {fmt(m.irpf_retenido)}€</span> : null}
+                  {m.origen === "venta_crm" ? <span style={{ color: "#555" }}> · CRM</span> : null}
+                </div>
               </div>
+              <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: tipoColor, flexShrink: 0 }}>
+                {m.tipo === "ingreso" ? "+" : "−"}{fmt(Number(m.importe))}€
+              </div>
+              <button onClick={() => {
+                if (isEditing) { setEditandoMov(null); setEditFiscal({}); }
+                else { setEditandoMov(m.id); setEditFiscal({ tipo_ingreso: m.tipo_ingreso || "con_iva_con_retencion", tipo_gasto: m.tipo_gasto || "iva_deducible", iva_incluido: m.iva_incluido || false, irpf_retenido: m.irpf_retenido || 0, proyecto: m.proyecto || "", categoria: m.categoria || "" }); }
+              }} style={{ background: "none", border: "none", color: isEditing ? "#beb0a2" : "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✎</button>
+              {m.origen !== "venta_crm" && (
+                <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
+              )}
             </div>
-            <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: tipoColor, flexShrink: 0 }}>
-              {m.tipo === "ingreso" ? "+" : "−"}{fmt(Number(m.importe))}€
-            </div>
-            {m.origen !== "venta_crm" && (
-              <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
+
+            {isEditing && (
+              <div style={{ padding: "0 12px 12px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 9, color: "#888", textTransform: "uppercase", letterSpacing: 1, margin: "8px 0 8px" }}>Editar campos fiscales</div>
+                {m.tipo === "ingreso" ? (
+                  <select value={editFiscal.tipo_ingreso} onChange={e => setEditFiscal(f => ({ ...f, tipo_ingreso: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                    {Object.entries(TIPO_INGRESO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                ) : (
+                  <select value={editFiscal.tipo_gasto} onChange={e => setEditFiscal(f => ({ ...f, tipo_gasto: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
+                    {Object.entries(TIPO_GASTO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                )}
+                {m.tipo === "ingreso" && editFiscal.tipo_ingreso !== "sin_iva" && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <label style={{ fontSize: 11, color: "#aaa" }}>IVA incluido en el importe</label>
+                    <input type="checkbox" checked={editFiscal.iva_incluido} onChange={e => setEditFiscal(f => ({ ...f, iva_incluido: e.target.checked }))} style={{ accentColor: "#beb0a2", width: 14, height: 14 }} />
+                  </div>
+                )}
+                {m.tipo === "ingreso" && editFiscal.tipo_ingreso === "con_iva_con_retencion" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>IRPF retenido €</label>
+                    <input type="number" value={editFiscal.irpf_retenido} onChange={e => setEditFiscal(f => ({ ...f, irpf_retenido: parseFloat(e.target.value) || 0 }))} style={inputStyle} />
+                  </div>
+                )}
+                <input placeholder="Proyecto / cliente" value={editFiscal.proyecto} onChange={e => setEditFiscal(f => ({ ...f, proyecto: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
+                <select value={editFiscal.categoria} onChange={e => setEditFiscal(f => ({ ...f, categoria: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }}>
+                  <option value="">Categoría...</option>
+                  {categoriasFin.filter(c => c.tipo === m.tipo).map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                </select>
+                <button onClick={guardarFiscal} style={{ width: "100%", background: "linear-gradient(135deg, #beb0a2, #a89686)", border: "none", borderRadius: 6, padding: 8, color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  Guardar cambios
+                </button>
+              </div>
             )}
           </div>
         );
