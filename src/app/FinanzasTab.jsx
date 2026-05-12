@@ -557,9 +557,7 @@ export default function FinanzasTab({
                 if (isEditing) { setEditandoMov(null); setEditFiscal({}); }
                 else { setEditandoMov(m.id); setEditFiscal({ tipo_ingreso: m.tipo_ingreso || "con_iva_con_retencion", tipo_gasto: m.tipo_gasto || "iva_deducible", iva_incluido: m.iva_incluido || false, irpf_retenido: m.irpf_retenido || 0, proyecto: m.proyecto || "", categoria: m.categoria || "" }); }
               }} style={{ background: "none", border: "none", color: isEditing ? "#beb0a2" : "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✎</button>
-              {m.origen !== "venta_crm" && (
-                <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
-              )}
+              <button onClick={() => borrarMovimiento(m.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
             </div>
 
             {isEditing && (
