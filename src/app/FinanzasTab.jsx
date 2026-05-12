@@ -235,12 +235,12 @@ export default function FinanzasTab({
       if (m.fecha < map[p].fechaInicio) map[p].fechaInicio = m.fecha;
 
       if (m.tipo === "ingreso") {
-        map[p].ingresos += imp;
+        map[p].ingresos += base + iva; // bruto = base + IVA siempre
         map[p].baseIngresos += base;
         map[p].ivaIngresos += iva;
         map[p].irpfRetenido += irpfMov;
       } else {
-        map[p].gastos += imp - irpfMov;
+        map[p].gastos += (base + iva) - irpfMov; // total pagado = base + IVA - IRPF retenido
         map[p].baseGastos += base;
         map[p].ivaGastos += iva;
       }
@@ -533,7 +533,7 @@ export default function FinanzasTab({
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "#beb0a2", fontWeight: 700, marginBottom: 10 }}>Proyectos · clientes</div>
           {porProyecto.map(p => {
             const abierto = proyectoAbierto === p.nombre;
-            const pctMargen = p.baseIngresos > 0 ? Math.round((p.margen / p.baseIngresos) * 100) : 0;
+            const pctMargen = p.ingresos > 0 ? Math.round((p.margen / p.ingresos) * 100) : 0;
             return (
               <div key={p.nombre} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                 <div onClick={() => setProyectoAbierto(abierto ? null : p.nombre)}
@@ -570,9 +570,12 @@ export default function FinanzasTab({
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(190,176,162,0.06)", borderRadius: 6, padding: "8px 12px", marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: "#888" }}>Margen neto (base ingresos − base gastos)</span>
-                      <span style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(190,176,162,0.08)", borderRadius: 6, padding: "10px 12px", marginBottom: 10, border: "1px solid rgba(190,176,162,0.2)" }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#beb0a2", fontWeight: 700 }}>Lo que te queda</div>
+                        <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>Base ingresos − IRPF retenido − base gastos</div>
+                      </div>
+                      <span style={{ fontFamily: "monospace", fontSize: 20, fontWeight: 700, color: p.margen >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(p.margen)}€</span>
                     </div>
                     <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Movimientos</div>
                     {p.movimientos.sort((a, b) => b.fecha.localeCompare(a.fecha)).map(m => {
