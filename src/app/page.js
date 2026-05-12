@@ -243,7 +243,6 @@ export default function App() {
   };
 
   const borrarMovimiento = async (id) => {
-    if (!confirm("¿Borrar movimiento?")) return;
     await fetch(`/api/finanzas?id=${id}`, { method: "DELETE", headers: finHeaders() });
     cargarFinanzas();
   };
@@ -256,7 +255,6 @@ export default function App() {
   };
 
   const borrarCuadre = async (id) => {
-    if (!confirm("¿Borrar este cuadre?")) return;
     await fetch(`/api/cuadres-caja?id=${id}`, { method: "DELETE", headers: finHeaders() });
     cargarFinanzas();
   };
@@ -747,10 +745,10 @@ export default function App() {
           {tab === "finanzas" && <FinanzasTab
             finanzasUnlocked={finanzasUnlocked} finanzasPwdInput={finanzasPwdInput} setFinanzasPwdInput={setFinanzasPwdInput}
             finanzasError={finanzasError} setFinanzasError={setFinanzasError} unlockFinanzas={unlockFinanzas}
-            finanzasData={finanzasData} categoriasFin={categoriasFin}
+            finanzasData={finanzasData} categoriasFin={categoriasFin} finanzasPwd={finanzasPwd}
             cuadresCaja={cuadresCaja} crearCuadre={crearCuadre} borrarCuadre={borrarCuadre}
             crearMov={crearMov} setCrearMov={setCrearMov} nuevoMov={nuevoMov} setNuevoMov={setNuevoMov}
-            crearMovimiento={crearMovimiento} borrarMovimiento={borrarMovimiento}
+            crearMovimiento={crearMovimiento} borrarMovimiento={borrarMovimiento} recargarFinanzas={cargarFinanzas}
             crearCategoria={crearCategoria} setCrearCategoria={setCrearCategoria}
             nuevaCategoria={nuevaCategoria} setNuevaCategoria={setNuevaCategoria}
             crearCategoriaFin={crearCategoriaFin} borrarCategoriaFin={borrarCategoriaFin}
