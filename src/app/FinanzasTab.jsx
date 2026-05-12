@@ -558,6 +558,12 @@ export default function FinanzasTab({
                   {m.fecha} · {m.categoria || "—"} · {m.cuenta || "banco"}
                   {m.proyecto ? <span style={{ color: "#beb0a2" }}> · {m.proyecto}</span> : null}
                   {tipoLabel ? <span style={{ color: "#555" }}> · {tipoLabel}</span> : null}
+                  {m.iva_incluido && Number(m.importe) > 0 && (() => {
+                    const pct = Number(m.pct_iva_mov) || 21;
+                    const base = Number(m.importe) / (1 + pct / 100);
+                    const iva = Number(m.importe) - base;
+                    return <span style={{ color: "#666" }}> · Base {fmt(base)}€ · IVA {fmt(iva)}€</span>;
+                  })()}
                   {m.irpf_retenido > 0 ? <span style={{ color: "#888" }}> · ret. {fmt(m.irpf_retenido)}€</span> : null}
                   {m.origen === "venta_crm" ? <span style={{ color: "#555" }}> · CRM</span> : null}
                 </div>
