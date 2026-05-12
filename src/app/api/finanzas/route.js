@@ -132,6 +132,7 @@ export async function POST(req) {
     tipo_ingreso: body.tipo_ingreso || "con_iva_con_retencion",
     tipo_gasto: body.tipo_gasto || "iva_deducible",
     proyecto: body.proyecto || null,
+    modo_iva: body.modo_iva || "base",
   }).select().single();
   if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
   return Response.json({ ok: true, movimiento: result.data });
@@ -142,7 +143,7 @@ export async function PATCH(req) {
   const body = await req.json();
   if (!body.id) return Response.json({ error: "Falta id" }, { status: 400 });
   const update = { updated_at: new Date().toISOString() };
-  for (const c of ["tipo", "fecha", "importe", "categoria", "descripcion", "cuenta", "iva_incluido", "pct_iva_mov", "deducible", "irpf_retenido", "tipo_ingreso", "tipo_gasto", "proyecto"]) {
+  for (const c of ["tipo", "fecha", "importe", "categoria", "descripcion", "cuenta", "iva_incluido", "pct_iva_mov", "deducible", "irpf_retenido", "tipo_ingreso", "tipo_gasto", "proyecto", "modo_iva"]) {
     if (body[c] !== undefined) update[c] = body[c] === "" ? null : body[c];
   }
   if (update.importe !== undefined) update.importe = Number(update.importe);
