@@ -30,8 +30,9 @@ function fmt2(n) {
   return Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// Siempre devuelve la base imponible
+// Siempre devuelve la base imponible. Ajustes no cuentan como ingreso/gasto.
 function getBase(mov) {
+  if (mov.tipo === "ajuste") return 0;
   const imp = Number(mov.importe) || 0;
   const pct = Number(mov.pct_iva_mov) || 21;
   const modo = mov.modo_iva || ((mov.iva_incluido === true || mov.iva_incluido === "true") ? "incluido" : "sin_iva");
@@ -190,11 +191,16 @@ export default function FinanzasTab({
   }, [movimientos, filtroAno, filtroQ, filtroTipo]);
 
   // Todos los cálculos usan base imponible
+  // Ajustes mueven banco/caja pero NO afectan cobrado/gastado/beneficio
   const resumen = useMemo(() => {
     let cobrado = 0, gastado = 0, banco = 0, caja = 0;
     for (const m of movFiltrados) {
       const b = getBase(m);
-      if (m.tipo === "ingreso") {
+      if (m.tipo === "ajuste") {
+        // Solo mueve la cuenta, no cobra ni gasta
+        const imp = Number(m.importe) || 0;
+        if (m.cuenta === "caja") caja += imp; else banco += imp;
+      } else if (m.tipo === "ingreso") {
         cobrado += b;
         if (m.cuenta === "caja") caja += b; else banco += b;
       } else {
@@ -308,22 +314,20 @@ export default function FinanzasTab({
         {/* TRES NÚMEROS GORDOS — siempre bases */}
         <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(190,176,162,0.15)", borderRadius: 12, padding: "10px 8px", marginBottom: 14 }}>
           <div style={{ fontSize: 8, color: "#555", textAlign: "center", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 10 }}>Bases imponibles · {periodoLabel}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
             <Tarjeta label="Cobrado" valor={resumen.cobrado} color="#4ade80" />
             <Tarjeta label="Gastado" valor={resumen.gastado} color="#f87171" />
-            <Tarjeta label="Saldo" valor={resumen.saldo} color={resumen.saldo >= 0 ? "#beb0a2" : "#f87171"} grande />
+            <Tarjeta label="Beneficio" valor={resumen.saldo} color={resumen.saldo >= 0 ? "#beb0a2" : "#f87171"} grande />
           </div>
-        </div>
-
-        {/* CUENTAS */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 9, color: "#777", marginBottom: 4 }}>Banco</div>
-            <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: resumen.banco >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(resumen.banco)}€</div>
-          </div>
-          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 9, color: "#777", marginBottom: 4 }}>Caja</div>
-            <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: resumen.caja >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(resumen.caja)}€</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: 8, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, color: "#555", marginBottom: 3 }}>🏦 Banco</div>
+              <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: resumen.banco >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(resumen.banco)}€</div>
+            </div>
+            <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: 8, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, color: "#555", marginBottom: 3 }}>💵 Efectivo</div>
+              <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: resumen.caja >= 0 ? "#beb0a2" : "#f87171" }}>{fmt(resumen.caja)}€</div>
+            </div>
           </div>
         </div>
 
@@ -434,26 +438,33 @@ export default function FinanzasTab({
         {crearMov && (
           <div style={{ background: "rgba(190,176,162,0.04)", border: "1px solid rgba(190,176,162,0.25)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
             <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
-              {[["ingreso","+ Ingreso","rgba(34,197,94,0.18)","#4ade80"],["gasto","− Gasto","rgba(248,113,113,0.18)","#f87171"]].map(([t, label, bg, col]) => (
+              {[["ingreso","+ Ingreso","rgba(34,197,94,0.18)","#4ade80"],["gasto","− Gasto","rgba(248,113,113,0.18)","#f87171"],["ajuste","⇄ Ajuste","rgba(100,116,139,0.18)","#64748b"]].map(([t, label, bg, col]) => (
                 <button key={t} onClick={() => setNuevoMov(m => ({ ...m, tipo: t, categoria: "" }))}
                   style={{ flex: 1, background: nuevoMov.tipo === t ? bg : "rgba(0,0,0,0.3)", border: `1px solid ${nuevoMov.tipo === t ? col : "rgba(255,255,255,0.08)"}`, borderRadius: 6, padding: 8, color: nuevoMov.tipo === t ? col : "#666", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                   {label}
                 </button>
               ))}
             </div>
+            {nuevoMov.tipo === "ajuste" && (
+              <div style={{ background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: 6, padding: "6px 8px", fontSize: 10, color: "#64748b", marginBottom: 6 }}>
+                Un ajuste corrige el saldo de banco o efectivo sin contar como ingreso ni gasto. No afecta al beneficio.
+              </div>
+            )}
             <input type="date" value={nuevoMov.fecha} onChange={e => setNuevoMov(m => ({ ...m, fecha: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
             <input type="number" placeholder="Importe (€)" value={nuevoMov.importe} onChange={e => setNuevoMov(m => ({ ...m, importe: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }} />
 
-            <IvaSelector
-              modo={nuevoMov.modo_iva || "sin_iva"}
-              pct={nuevoMov.pct_iva_mov || 21}
-              importe={nuevoMov.importe}
-              retencion={nuevoMov.pct_retencion || 0}
-              tipo={nuevoMov.tipo}
-              onModo={v => setNuevoMov(m => ({ ...m, modo_iva: v }))}
-              onPct={v => setNuevoMov(m => ({ ...m, pct_iva_mov: v }))}
-              onRetencion={v => setNuevoMov(m => ({ ...m, pct_retencion: v }))}
-            />
+            {nuevoMov.tipo !== "ajuste" && (
+              <IvaSelector
+                modo={nuevoMov.modo_iva || "sin_iva"}
+                pct={nuevoMov.pct_iva_mov || 21}
+                importe={nuevoMov.importe}
+                retencion={nuevoMov.pct_retencion || 0}
+                tipo={nuevoMov.tipo}
+                onModo={v => setNuevoMov(m => ({ ...m, modo_iva: v }))}
+                onPct={v => setNuevoMov(m => ({ ...m, pct_iva_mov: v }))}
+                onRetencion={v => setNuevoMov(m => ({ ...m, pct_retencion: v }))}
+              />
+            )}
 
             <select value={nuevoMov.categoria || ""} onChange={e => setNuevoMov(m => ({ ...m, categoria: e.target.value }))} style={{ ...inputStyle, marginBottom: 6 }}>
               <option value="">Categoría...</option>
@@ -563,7 +574,7 @@ export default function FinanzasTab({
 
         {movFiltrados.map(m => {
           const isEditing = editandoMov === m.id;
-          const color = m.tipo === "ingreso" ? "#4ade80" : "#f87171";
+          const color = m.tipo === "ingreso" ? "#4ade80" : m.tipo === "ajuste" ? "#64748b" : "#f87171";
           const b = getBase(m);
           const imp = Number(m.importe) || 0;
           const modoIva = m.modo_iva || (m.iva_incluido === true ? "incluido" : "sin_iva");
