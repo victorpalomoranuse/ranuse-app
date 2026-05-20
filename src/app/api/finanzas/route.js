@@ -1,7 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
 
-// Gate por contraseña vía header. Si no hay contraseña configurada, dejamos pasar
-// para no bloquear desarrollo, pero IMPRIMIMOS un warning para que se note.
 function checkAuth(req) {
   const expected = process.env.FINANZAS_PASSWORD;
   if (!expected) {
@@ -23,88 +21,7 @@ export async function GET(req) {
     .from("movimientos").select("*").order("fecha", { ascending: false });
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  // Métricas: por mes (con desglose categoría y cuenta)
-  const porMes = {};
-  const porCategoria = { ingreso: {}, gasto: {} };
-  const porCuenta = {};
-  let totalIngresos = 0, totalGastos = 0;
-  let ivaRepercutido = 0, ivaSoportadoDeducible = 0;
-  let irpfRetenidoTotal = 0;
-  let baseIngresosNeta = 0, baseGastosDeducibles = 0;
-
-  for (const m of (movimientos || [])) {
-    const fecha = new Date(m.fecha);
-    if (isNaN(fecha)) continue;
-    const mesKey = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
-    if (!porMes[mesKey]) porMes[mesKey] = { mes: mesKey, ingresos: 0, gastos: 0, neto: 0 };
-    const importe = Number(m.importe) || 0;
-    const pctIva = Number(m.pct_iva_mov) || 21;
-    const ivaIncluido = m.iva_incluido === true;
-    const deducible = m.deducible !== false; // true por defecto
-    const irpfRetenido = Number(m.irpf_retenido) || 0;
-
-    // Base sin IVA
-    const base = ivaIncluido ? importe / (1 + pctIva / 100) : importe;
-    const iva = ivaIncluido ? importe - base : base * (pctIva / 100);
-
-    if (m.tipo === "ingreso") {
-      porMes[mesKey].ingresos += importe;
-      totalIngresos += importe;
-      ivaRepercutido += iva;
-      irpfRetenidoTotal += irpfRetenido;
-      baseIngresosNeta += base;
-    } else {
-      porMes[mesKey].gastos += importe;
-      totalGastos += importe;
-      if (deducible) ivaSoportadoDeducible += iva;
-      baseGastosDeducibles += deducible ? base : 0;
-    }
-    porMes[mesKey].neto = porMes[mesKey].ingresos - porMes[mesKey].gastos;
-
-    const catKey = m.categoria || "Sin categoría";
-    if (!porCategoria[m.tipo][catKey]) porCategoria[m.tipo][catKey] = 0;
-    porCategoria[m.tipo][catKey] += importe;
-
-    const cuentaKey = m.cuenta || "sin_cuenta";
-    if (!porCuenta[cuentaKey]) porCuenta[cuentaKey] = { cuenta: cuentaKey, ingresos: 0, gastos: 0, saldo: 0 };
-    if (m.tipo === "ingreso") porCuenta[cuentaKey].ingresos += importe;
-    else porCuenta[cuentaKey].gastos += importe;
-    porCuenta[cuentaKey].saldo = porCuenta[cuentaKey].ingresos - porCuenta[cuentaKey].gastos;
-  }
-
-  const ivaNeto = ivaRepercutido - ivaSoportadoDeducible;
-  const beneficioNeto = baseIngresosNeta - baseGastosDeducibles;
-  // Provisión IRPF: estimación del 20% sobre beneficio neto (tipo medio autónomo)
-  const provisionIrpf = Math.max(0, beneficioNeto * 0.20);
-
-  const meses = Object.values(porMes).sort((a, b) => b.mes.localeCompare(a.mes));
-  const ingresosCat = Object.entries(porCategoria.ingreso)
-    .map(([cat, total]) => ({ categoria: cat, total })).sort((a, b) => b.total - a.total);
-  const gastosCat = Object.entries(porCategoria.gasto)
-    .map(([cat, total]) => ({ categoria: cat, total })).sort((a, b) => b.total - a.total);
-  const cuentas = Object.values(porCuenta);
-
-  return Response.json({
-    movimientos,
-    resumen: {
-      total_ingresos: Number(totalIngresos.toFixed(2)),
-      total_gastos:   Number(totalGastos.toFixed(2)),
-      caja_neta:      Number((totalIngresos - totalGastos).toFixed(2)),
-    },
-    fiscal: {
-      iva_repercutido:         Number(ivaRepercutido.toFixed(2)),
-      iva_soportado_deducible: Number(ivaSoportadoDeducible.toFixed(2)),
-      iva_neto_pagar:          Number(ivaNeto.toFixed(2)),
-      irpf_retenido_acumulado: Number(irpfRetenidoTotal.toFixed(2)),
-      base_ingresos_neta:      Number(baseIngresosNeta.toFixed(2)),
-      base_gastos_deducibles:  Number(baseGastosDeducibles.toFixed(2)),
-      beneficio_neto:          Number(beneficioNeto.toFixed(2)),
-      provision_irpf:          Number(provisionIrpf.toFixed(2)),
-    },
-    por_mes: meses,
-    por_categoria: { ingresos: ingresosCat, gastos: gastosCat },
-    por_cuenta: cuentas,
-  });
+  return Response.json({ movimientos });
 }
 
 export async function POST(req) {
@@ -113,7 +30,7 @@ export async function POST(req) {
   if (!body.tipo || !body.fecha || !body.importe) {
     return Response.json({ error: "Faltan tipo, fecha o importe" }, { status: 400 });
   }
-  if (!["ingreso", "gasto"].includes(body.tipo)) {
+  if (!["ingreso", "gasto", "ajuste"].includes(body.tipo)) {
     return Response.json({ error: "Tipo inválido" }, { status: 400 });
   }
   const result = await supabaseAdmin.from("movimientos").insert({
@@ -129,10 +46,11 @@ export async function POST(req) {
     pct_iva_mov: Number(body.pct_iva_mov) || 21,
     deducible: body.deducible !== false,
     irpf_retenido: Number(body.irpf_retenido) || 0,
-    tipo_ingreso: body.tipo_ingreso || "con_iva_con_retencion",
-    tipo_gasto: body.tipo_gasto || "iva_deducible",
+    tipo_ingreso: body.tipo_ingreso || null,
+    tipo_gasto: body.tipo_gasto || null,
     proyecto: body.proyecto || null,
-    modo_iva: body.modo_iva || "base",
+    modo_iva: body.modo_iva || "sin_iva",
+    pct_retencion: Number(body.pct_retencion) || 0,
   }).select().single();
   if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
   return Response.json({ ok: true, movimiento: result.data });
@@ -143,7 +61,7 @@ export async function PATCH(req) {
   const body = await req.json();
   if (!body.id) return Response.json({ error: "Falta id" }, { status: 400 });
   const update = { updated_at: new Date().toISOString() };
-  for (const c of ["tipo", "fecha", "importe", "categoria", "descripcion", "cuenta", "iva_incluido", "pct_iva_mov", "deducible", "irpf_retenido", "tipo_ingreso", "tipo_gasto", "proyecto", "modo_iva"]) {
+  for (const c of ["tipo", "fecha", "importe", "categoria", "descripcion", "cuenta", "iva_incluido", "pct_iva_mov", "deducible", "irpf_retenido", "tipo_ingreso", "tipo_gasto", "proyecto", "modo_iva", "pct_retencion"]) {
     if (body[c] !== undefined) update[c] = body[c] === "" ? null : body[c];
   }
   if (update.importe !== undefined) update.importe = Number(update.importe);
