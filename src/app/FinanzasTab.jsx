@@ -24,6 +24,15 @@ function fmt(n) {
   return Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+// Extrae la base imponible de un movimiento según cómo se metió
+function getBase(m) {
+  const base = getBase(m);
+  const pct = Number(m.pct_iva_mov) || 21;
+  const modo = m.modo_iva || (m.iva_incluido === true || m.iva_incluido === "true" ? "incluido" : "base");
+  if (modo === "incluido") return imp / (1 + pct / 100);
+  return imp; // "base" o "sin_iva" → el importe ya es la base
+}
+
 export default function FinanzasTab({
   finanzasUnlocked, finanzasPwdInput, setFinanzasPwdInput, finanzasError, setFinanzasError, unlockFinanzas,
   finanzasData, categoriasFin, finanzasPwd = "",
@@ -68,13 +77,13 @@ export default function FinanzasTab({
   const resumen = useMemo(() => {
     let cobrado = 0, gastado = 0, banco = 0, caja = 0;
     for (const m of movFiltrados) {
-      const imp = Number(m.importe) || 0;
+      const base = getBase(m);
       if (m.tipo === "ingreso") {
-        cobrado += imp;
-        if (m.cuenta === "caja") caja += imp; else banco += imp;
+        cobrado += base;
+        if (m.cuenta === "caja") caja += base; else banco += base;
       } else {
-        gastado += imp;
-        if (m.cuenta === "caja") caja -= imp; else banco -= imp;
+        gastado += base;
+        if (m.cuenta === "caja") caja -= base; else banco -= base;
       }
     }
     return { cobrado, gastado, saldo: cobrado - gastado, banco, caja };
@@ -85,9 +94,9 @@ export default function FinanzasTab({
     const ing = {}, gas = {};
     for (const m of movFiltrados) {
       const cat = m.categoria || "(sin categoría)";
-      const imp = Number(m.importe) || 0;
-      if (m.tipo === "ingreso") ing[cat] = (ing[cat] || 0) + imp;
-      else gas[cat] = (gas[cat] || 0) + imp;
+      const base = getBase(m);
+      if (m.tipo === "ingreso") ing[cat] = (ing[cat] || 0) + base;
+      else gas[cat] = (gas[cat] || 0) + base;
     }
     return {
       ingresos: Object.entries(ing).sort((a, b) => b[1] - a[1]),
@@ -102,11 +111,11 @@ export default function FinanzasTab({
       if (!m.proyecto) continue;
       const p = m.proyecto.trim();
       if (!map[p]) map[p] = { cobrado: 0, gastado: 0, movimientos: [], fechaInicio: m.fecha };
-      const imp = Number(m.importe) || 0;
+      const base = getBase(m);
       map[p].movimientos.push(m);
       if (m.fecha < map[p].fechaInicio) map[p].fechaInicio = m.fecha;
-      if (m.tipo === "ingreso") map[p].cobrado += imp;
-      else map[p].gastado += imp;
+      if (m.tipo === "ingreso") map[p].cobrado += base;
+      else map[p].gastado += base;
     }
     return Object.entries(map)
       .map(([nombre, d]) => ({ nombre, ...d, margen: d.cobrado - d.gastado }))
@@ -501,6 +510,10 @@ export default function FinanzasTab({
         {movFiltrados.map(m => {
           const isEditing = editandoMov === m.id;
           const color = m.tipo === "ingreso" ? "#4ade80" : "#f87171";
+          const base = getBase(m);
+          const imp = Number(m.importe) || 0;
+          const modoIva = m.modo_iva || (m.iva_incluido === true || m.iva_incluido === "true" ? "incluido" : null);
+          const tieneIvaIncluido = modoIva === "incluido" && Math.abs(imp - base) > 0.5;
           return (
             <div key={m.id} style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${isEditing ? "rgba(190,176,162,0.3)" : "rgba(255,255,255,0.06)"}`, borderRadius: 8, marginBottom: 5 }}>
               <div style={{ padding: "9px 12px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -516,8 +529,15 @@ export default function FinanzasTab({
                     {m.proyecto ? <span style={{ color: "#beb0a2" }}> · {m.proyecto}</span> : null}
                   </div>
                 </div>
-                <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color, flexShrink: 0 }}>
-                  {m.tipo === "ingreso" ? "+" : "−"}{fmt(Number(m.importe))}€
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color }}>
+                    {m.tipo === "ingreso" ? "+" : "−"}{fmt(base)}€
+                  </div>
+                  {tieneIvaIncluido && (
+                    <div style={{ fontFamily: "monospace", fontSize: 9, color: "#555" }}>
+                      total {fmt(imp)}€
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {
